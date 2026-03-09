@@ -253,6 +253,36 @@ For the offline synthetic showcase:
 ./scripts/run_generate_synthetic_showcase.sh
 ```
 
+### Real Norman2019 results
+
+The figures below are generated from the real Norman2019 dataset
+(`scPerturb / Norman2019`, K562, single-gene perturbations, 10,500 cells, 512 HVGs, 105 conditions).
+
+![Norman2019 model comparison](docs/assets/model_comparison_seen_norman2019_demo.png)
+
+| Model | Seen Test Pearson | Seen Test MSE | Unseen Test Pearson | Unseen Test MSE |
+| --- | ---: | ---: | ---: | ---: |
+| Transformer | 0.604 | 0.0071 | 0.824 | 0.0011 |
+| MLP | 0.633 | 0.0066 | 0.837 | 0.00085 |
+| XGBoost | 0.618 | 0.0066 | 0.840 | 0.00084 |
+
+Transformer top-k DEG overlap (seen_test / unseen_test):
+- top-20: 0.816 / 0.930
+- top-50: 0.914 / 0.953
+- top-100: 0.964 / 0.976
+
+![Norman2019 inference preview (JUN)](docs/assets/transformer_inference_preview.png)
+
+All three models achieve **Pearson ≥ 0.82** on unseen perturbations, indicating strong generalization.
+The Transformer top-100 DEG overlap of **0.96–0.98** confirms that predicted expression shifts
+identify the correct differentially expressed genes at high recall.
+
+Regenerate these figures after training with:
+
+```bash
+./scripts/run_generate_results_assets.sh
+```
+
 ### Real Norman2019 workflow
 
 Real Norman2019 raw data and generated artifact directories are intentionally not committed by default.
@@ -278,6 +308,24 @@ After the real bundle exists, regenerate real-data figures with:
 ```bash
 ./scripts/run_generate_results_assets.sh
 ```
+
+## Notebooks
+
+The `notebooks/` directory contains two runnable Jupyter notebooks.
+Launch them with:
+
+```bash
+source .venv/bin/activate
+jupyter lab notebooks/
+```
+
+| Notebook | Description |
+| --- | --- |
+| [`01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb) | EDA of the Norman2019 bundle: dataset overview, perturbation frequency, control-mean distributions, delta-expression histogram, per-perturbation heatmap |
+| [`02_model_comparison.ipynb`](notebooks/02_model_comparison.ipynb) | Side-by-side metrics for Transformer, MLP, XGBoost; training curves; top-k DEG overlap bar charts; summary table |
+
+Both notebooks load from `data/processed/norman2019_demo_bundle` and `artifacts/`.
+Run `./scripts/run_norman2019_demo.sh` first to generate the required bundle.
 
 ## Repository Documents
 
