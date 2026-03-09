@@ -64,7 +64,7 @@ Start the Streamlit app:
 ./scripts/run_app.sh
 ```
 
-The app defaults to the real local demo artifacts:
+The app prefers the real local demo artifacts when they exist:
 - bundle: `data/processed/norman2019_demo_bundle`
 - artifact dir: `artifacts/transformer_seen_norman2019_demo`
 - checkpoint: `<artifact dir>/best_model.pt`
@@ -113,6 +113,18 @@ Download the default `Norman2019` dataset:
 
 ```bash
 ./scripts/download_norman2019.sh
+```
+
+If `curl` keeps resetting on your network, retry with the alternate backend:
+
+```bash
+./scripts/download_norman2019.sh --backend wget
+```
+
+If you downloaded the file manually, verify the checksum before continuing:
+
+```bash
+./scripts/download_norman2019.sh --verify-only
 ```
 
 Inspect AnnData schema and auto-resolved columns:
@@ -187,38 +199,42 @@ Write a structured local run summary:
 ```
 
 ## Results
+### Included offline showcase assets
 
-This repository already includes one complete local run on the real `Norman2019` demo bundle:
-- bundle: `10500` samples, `256` genes, `105` perturbations
-- primary metric: `pearson_per_perturbation`
-- artifact summaries:
-  - [`artifacts/transformer_seen_norman2019_demo/run_summary.json`](artifacts/transformer_seen_norman2019_demo/run_summary.json)
-  - [`artifacts/mlp_seen_norman2019_demo/run_summary.json`](artifacts/mlp_seen_norman2019_demo/run_summary.json)
-  - [`artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json`](artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json)
+The repository includes committed synthetic showcase figures that can be regenerated with:
 
-### Model Comparison
+```bash
+./scripts/run_generate_synthetic_showcase.sh
+```
 
-![Norman2019 demo bundle model comparison](docs/assets/model_comparison_seen_norman2019_demo.png)
+Use this offline showcase for:
+- local product and UI demos
+- interview-time walkthroughs of the training/evaluation pipeline
+- repository validation when the real dataset is not available yet
 
-| Model | Best Val Pearson | Seen Test Pearson | Seen Test MSE | Unseen Test Pearson | Unseen Test MSE |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Transformer | 0.6430 | 0.6523 | 0.0518 | 0.8652 | 0.0503 |
-| MLP | 0.6366 | 0.6420 | 0.0520 | 0.8706 | 0.0503 |
-| XGBoost | n/a | 0.6285 | 0.0526 | 0.8213 | 0.0494 |
+Do **not** present these synthetic metrics as real biological results.
+
+### Synthetic model comparison
+
+![Synthetic demo bundle model comparison](docs/assets/model_comparison_seen_synthetic_demo.png)
+
+| Model | Seen Test Pearson | Seen Test MSE | Unseen Test Pearson | Unseen Test MSE |
+| --- | ---: | ---: | ---: | ---: |
+| Transformer | 0.9988 | 0.0040 | 0.9989 | 0.0040 |
+| MLP | 0.9984 | 0.0047 | 0.9995 | 0.0036 |
+| XGBoost | 0.9992 | 0.0046 | 0.9999 | 0.0014 |
 
 Interpretation:
-- Transformer is the strongest model on the main `seen_test` metric.
-- MLP is close to Transformer and serves as a strong low-complexity baseline.
-- XGBoost is competitive on MSE but trails on the main `per-perturbation Pearson` metric.
-- `unseen_test` is easier than `seen_test` on this demo bundle, so this should be reported carefully.
+- the offline showcase verifies that preprocessing artifacts, model training, evaluation, ranking, and visualization all run locally
+- all models perform strongly on the synthetic task because the signal is intentionally structured and low-noise
+- this section is useful for engineering demonstration, not for claiming real perturbation biology performance
 
-### Streamlit Preview
+### Synthetic Streamlit preview
 
-![Transformer inference preview](docs/assets/transformer_inference_preview.png)
+![Synthetic transformer inference preview](docs/assets/transformer_inference_preview_synthetic_demo.png)
 
-The preview above is generated from the same checkpoint and bundle that the Streamlit app loads by default.
-When `artifacts/transformer_seen_norman2019_demo/deg_artifact.csv` exists, the ranking panel uses
-`predicted_delta + DEG significance` instead of prediction-only scoring.
+The preview above is generated from the same synthetic checkpoint and bundle that the app can fall back to automatically.
+
 Launch the interactive app locally with:
 
 ```bash
@@ -235,6 +251,32 @@ For the offline synthetic showcase:
 
 ```bash
 ./scripts/run_generate_synthetic_showcase.sh
+```
+
+### Real Norman2019 workflow
+
+Real Norman2019 raw data and generated artifact directories are intentionally not committed by default.
+Once `data/raw/NormanWeissman2019_filtered.h5ad` is present and verified, the supported local flow is:
+
+```bash
+./scripts/run_norman2019_demo.sh
+./scripts/run_train_transformer.sh \
+  --bundle-dir data/processed/norman2019_demo_bundle \
+  --output-dir artifacts/transformer_seen_norman2019_demo
+./scripts/run_train_baselines.sh \
+  --bundle-dir data/processed/norman2019_demo_bundle \
+  --output-dir artifacts/mlp_seen_norman2019_demo \
+  --baseline mlp
+./scripts/run_train_baselines.sh \
+  --bundle-dir data/processed/norman2019_demo_bundle \
+  --output-dir artifacts/xgboost_seen_norman2019_demo \
+  --baseline xgboost
+```
+
+After the real bundle exists, regenerate real-data figures with:
+
+```bash
+./scripts/run_generate_results_assets.sh
 ```
 
 ## Repository Documents
