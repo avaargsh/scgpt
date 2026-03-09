@@ -25,10 +25,35 @@ from src.evaluation.metrics import topk_overlap
 from src.ranking.target_ranking import build_target_ranking
 from src.utils.config import load_yaml
 
-DEFAULT_BUNDLE_DIR = "data/processed/norman2019_demo_bundle"
-DEFAULT_ARTIFACT_DIR = "artifacts/transformer_seen_norman2019_demo"
-DEFAULT_MODEL_CONFIG = "configs/model.yaml"
-DEFAULT_TRAIN_CONFIG = "configs/train.yaml"
+REAL_BUNDLE_DIR = "data/processed/norman2019_demo_bundle"
+REAL_ARTIFACT_DIR = "artifacts/transformer_seen_norman2019_demo"
+SYNTHETIC_BUNDLE_DIR = "data/processed/synthetic_demo_bundle"
+SYNTHETIC_ARTIFACT_DIR = "artifacts/transformer_seen_synthetic_demo"
+REAL_MODEL_CONFIG = "configs/model.yaml"
+REAL_TRAIN_CONFIG = "configs/train.yaml"
+SYNTHETIC_MODEL_CONFIG = "configs/model_synthetic_demo.yaml"
+SYNTHETIC_TRAIN_CONFIG = "configs/train_synthetic_demo.yaml"
+
+
+def resolve_default_demo_paths() -> tuple[str, str, str, str]:
+    if Path(REAL_BUNDLE_DIR).exists() or Path(REAL_ARTIFACT_DIR).exists():
+        return REAL_BUNDLE_DIR, REAL_ARTIFACT_DIR, REAL_MODEL_CONFIG, REAL_TRAIN_CONFIG
+    if Path(SYNTHETIC_BUNDLE_DIR).exists() or Path(SYNTHETIC_ARTIFACT_DIR).exists():
+        return (
+            SYNTHETIC_BUNDLE_DIR,
+            SYNTHETIC_ARTIFACT_DIR,
+            SYNTHETIC_MODEL_CONFIG,
+            SYNTHETIC_TRAIN_CONFIG,
+        )
+    return REAL_BUNDLE_DIR, REAL_ARTIFACT_DIR, REAL_MODEL_CONFIG, REAL_TRAIN_CONFIG
+
+
+(
+    DEFAULT_BUNDLE_DIR,
+    DEFAULT_ARTIFACT_DIR,
+    DEFAULT_MODEL_CONFIG,
+    DEFAULT_TRAIN_CONFIG,
+) = resolve_default_demo_paths()
 
 
 @st.cache_data(show_spinner=False)
@@ -135,7 +160,8 @@ if not checkpoint_path.exists():
     st.info(
         "Checkpoint is missing. Train a torch model first, for example "
         "`./scripts/run_train_transformer.sh --bundle-dir data/processed/norman2019_demo_bundle "
-        "--output-dir artifacts/transformer_seen_norman2019_demo`."
+        "--output-dir artifacts/transformer_seen_norman2019_demo`, "
+        "or generate an offline demo with `./scripts/run_generate_synthetic_demo.sh`."
     )
     st.stop()
 

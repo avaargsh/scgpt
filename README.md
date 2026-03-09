@@ -26,8 +26,8 @@ This repository now uses `uv` as the default environment and dependency manager.
 - Python version: `3.11`
 - local virtual environment: `.venv`
 - local uv cache: `.uv-cache`
-- dependency source of truth: [`pyproject.toml`](/Users/musun/Desktop/scgpt/pyproject.toml)
-- locked dependency snapshot: [`uv.lock`](/Users/musun/Desktop/scgpt/uv.lock)
+- dependency source of truth: [`pyproject.toml`](pyproject.toml)
+- locked dependency snapshot: [`uv.lock`](uv.lock)
 
 ### Bootstrap
 
@@ -68,6 +68,19 @@ The app defaults to the real local demo artifacts:
 - bundle: `data/processed/norman2019_demo_bundle`
 - artifact dir: `artifacts/transformer_seen_norman2019_demo`
 - checkpoint: `<artifact dir>/best_model.pt`
+
+Offline fallback when raw data download is unavailable:
+
+```bash
+./scripts/run_generate_synthetic_demo.sh
+```
+
+This generates a clearly labeled synthetic bundle and demo artifacts:
+- bundle: `data/processed/synthetic_demo_bundle`
+- artifact dir: `artifacts/transformer_seen_synthetic_demo`
+- files: `best_model.pt`, `seen_test_metrics.json`, `unseen_test_metrics.json`, `deg_artifact.csv`, `run_summary.json`
+
+When the real Norman2019 demo artifacts are absent but the synthetic ones exist, the Streamlit app will default to the synthetic paths automatically.
 
 Current app behavior:
 - load a saved torch checkpoint
@@ -167,9 +180,9 @@ This repository already includes one complete local run on the real `Norman2019`
 - bundle: `10500` samples, `256` genes, `105` perturbations
 - primary metric: `pearson_per_perturbation`
 - artifact summaries:
-  - [`artifacts/transformer_seen_norman2019_demo/run_summary.json`](/Users/musun/Desktop/scgpt/artifacts/transformer_seen_norman2019_demo/run_summary.json)
-  - [`artifacts/mlp_seen_norman2019_demo/run_summary.json`](/Users/musun/Desktop/scgpt/artifacts/mlp_seen_norman2019_demo/run_summary.json)
-  - [`artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json`](/Users/musun/Desktop/scgpt/artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json)
+  - [`artifacts/transformer_seen_norman2019_demo/run_summary.json`](artifacts/transformer_seen_norman2019_demo/run_summary.json)
+  - [`artifacts/mlp_seen_norman2019_demo/run_summary.json`](artifacts/mlp_seen_norman2019_demo/run_summary.json)
+  - [`artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json`](artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json)
 
 ### Model Comparison
 
@@ -208,12 +221,12 @@ Regenerate the README result assets with:
 
 ## Repository Documents
 
-- [`PROJECT_PLAN.md`](/Users/musun/Desktop/scgpt/PROJECT_PLAN.md): development plan and architecture decisions
-- [`AGENTS.md`](/Users/musun/Desktop/scgpt/AGENTS.md): implementation constraints and anti-drift guardrails
-- [`pyproject.toml`](/Users/musun/Desktop/scgpt/pyproject.toml): uv project definition and dependency source of truth
-- [`configs/data.yaml`](/Users/musun/Desktop/scgpt/configs/data.yaml): data and preprocessing defaults
-- [`configs/model.yaml`](/Users/musun/Desktop/scgpt/configs/model.yaml): model and memory defaults
-- [`configs/train.yaml`](/Users/musun/Desktop/scgpt/configs/train.yaml): training, evaluation, and ranking defaults
+- [`PROJECT_PLAN.md`](PROJECT_PLAN.md): development plan and architecture decisions
+- [`AGENTS.md`](AGENTS.md): implementation constraints and anti-drift guardrails
+- [`pyproject.toml`](pyproject.toml): uv project definition and dependency source of truth
+- [`configs/data.yaml`](configs/data.yaml): data and preprocessing defaults
+- [`configs/model.yaml`](configs/model.yaml): model and memory defaults
+- [`configs/train.yaml`](configs/train.yaml): training, evaluation, and ranking defaults
 
 ## Recommended Workflow
 
