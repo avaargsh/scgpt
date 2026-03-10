@@ -1,6 +1,40 @@
 # PerturbScope-GPT
 
-PerturbScope-GPT is a local-first AI4Bio project for single-cell perturbation response prediction and target prioritization.
+> Local-first Transformer for single-cell perturbation response prediction,
+> trained on Norman2019 (K562 · 10,500 cells · 512 HVGs · 105 single-gene conditions).
+
+**Tech stack:** Python 3.11 · PyTorch · scanpy · scikit-learn · XGBoost · Streamlit · uv
+
+## Key Results (Norman2019, real data)
+
+| Model | Unseen Pearson | Unseen MSE | Top-100 DEG Overlap |
+| --- | ---: | ---: | ---: |
+| Transformer | 0.824 | 0.0011 | **0.976** |
+| MLP | 0.837 | 0.00085 | — |
+| XGBoost | 0.840 | 0.00084 | — |
+
+All three models generalize to **unseen perturbations** with Pearson ≥ 0.82.
+The Transformer's top-100 DEG overlap of **0.976** confirms that predicted
+expression shifts identify the correct differentially expressed genes at high recall.
+
+See [Real Norman2019 results](#real-norman2019-results) for per-split tables and figures.
+
+## Quick Start
+
+No dataset download required to try the offline demo:
+
+```bash
+# 1. Set up environment
+./scripts/bootstrap_env.sh && source .venv/bin/activate
+
+# 2. Generate offline synthetic showcase (trains all three models)
+./scripts/run_generate_synthetic_showcase.sh
+
+# 3. Launch Streamlit app
+./scripts/run_app.sh
+```
+
+For the full Norman2019 real-data flow, see [Real Norman2019 workflow](#real-norman2019-workflow) below.
 
 ## Project Goal
 
@@ -10,6 +44,8 @@ Build a job-ready MVP that can:
 - compare against MLP and XGBoost baselines
 - produce DEG-based target rankings
 - expose inference results in a Streamlit demo
+
+See [`docs/architecture.md`](docs/architecture.md) for model and data-flow details.
 
 ## Local-First MVP Scope
 
