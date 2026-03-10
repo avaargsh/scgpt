@@ -5,6 +5,8 @@
 
 **Tech stack:** Python 3.11 · PyTorch · scanpy · scikit-learn · XGBoost · Streamlit · uv
 
+[![CI](https://github.com/musuntana/scgpt/actions/workflows/ci.yml/badge.svg)](https://github.com/musuntana/scgpt/actions/workflows/ci.yml)
+
 ## Key Results (Norman2019, real data)
 
 | Model | Unseen Pearson | Unseen MSE | Top-100 DEG Overlap |
