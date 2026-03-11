@@ -143,6 +143,51 @@ The snapshot command summarizes:
 - key demo asset paths
 - recommended commands for a live walkthrough
 
+Prepare a live interview/demo flow:
+
+```bash
+./scripts/run_showcase.sh
+# or
+make showcase
+```
+
+Launch the showcase and open the app immediately:
+
+```bash
+./scripts/run_showcase.sh --launch-app
+```
+
+The showcase command:
+- reuses real Norman2019 artifacts when available
+- regenerates the offline synthetic showcase only when needed
+- writes `artifacts/project_snapshot.json`
+- prints the recommended order for a live walkthrough
+
+Export an interview speaking script:
+
+```bash
+./scripts/run_pitch.sh
+# or
+make pitch
+```
+
+Useful variants:
+
+```bash
+./scripts/run_pitch.sh --track ai4bio
+./scripts/run_pitch.sh --track ml-engineering
+./scripts/run_pitch.sh --json
+./scripts/run_pitch.sh --output-path artifacts/interview_script.txt
+```
+
+The pitch command includes:
+- 30-second project intro
+- 2-minute technical walkthrough
+- live demo script
+- honest limitations
+- next-step talking points
+- suggested answers to common interviewer questions
+
 Install pre-commit hooks (runs ruff automatically before each commit):
 
 ```bash
