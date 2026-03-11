@@ -1,7 +1,7 @@
 # PerturbScope-GPT — development shortcuts
 # All targets run through uv so the virtual environment is handled automatically.
 
-.PHONY: help test lint typecheck format demo notebooks clean
+.PHONY: help test lint typecheck format doctor demo notebooks clean
 
 UV := UV_PROJECT_ENVIRONMENT=.venv UV_CACHE_DIR=.uv-cache uv run
 PYTHON := $(UV) python
@@ -25,6 +25,8 @@ typecheck:  ## Run mypy static type checker on src/
 	$(UV) mypy src/
 
 # ── Demo & data ───────────────────────────────────────────────────────────────
+doctor:  ## Inspect local project/demo readiness
+	./scripts/run_doctor.sh
 
 demo:  ## Launch the Streamlit app
 	./scripts/run_app.sh

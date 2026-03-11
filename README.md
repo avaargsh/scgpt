@@ -105,6 +105,22 @@ make lint        # ruff check --fix
 make typecheck   # mypy src/
 ```
 
+Inspect local project/demo readiness:
+
+```bash
+./scripts/run_doctor.sh
+# or
+make doctor
+```
+
+The doctor command checks:
+- core repository files (`README.md`, `PROJECT_PLAN.md`, `pyproject.toml`, `uv.lock`, CI workflow)
+- local environment pinning (`.python-version`, `.venv`)
+- notebooks
+- offline synthetic demo artifacts
+- real Norman2019 bundle and result artifacts
+- model-comparison summaries for MLP and XGBoost
+
 Install pre-commit hooks (runs ruff automatically before each commit):
 
 ```bash
