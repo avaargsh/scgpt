@@ -593,6 +593,8 @@ Run `./scripts/run_norman2019_demo.sh` first to generate the required bundle.
 
 - [`PROJECT_PLAN.md`](PROJECT_PLAN.md): development plan and architecture decisions
 - [`AGENTS.md`](AGENTS.md): implementation constraints and anti-drift guardrails
+- [`docs/architecture.md`](docs/architecture.md): model and data-flow details
+- [`docs/artifact-generation-guide.md`](docs/artifact-generation-guide.md): script dependency DAG and recommended execution order
 - [`pyproject.toml`](pyproject.toml): uv project definition and dependency source of truth
 - [`configs/data.yaml`](configs/data.yaml): data and preprocessing defaults
 - [`configs/model.yaml`](configs/model.yaml): model and memory defaults

@@ -57,11 +57,19 @@ def main() -> int:
     }
 
     if plan["prepare_synthetic_showcase"]:
-        subprocess.run(
-            [str(project_root / "scripts/run_generate_synthetic_showcase.sh")],
-            check=True,
-        )
-        actions_taken["generated_synthetic_showcase"] = True
+        try:
+            subprocess.run(
+                [str(project_root / "scripts/run_generate_synthetic_showcase.sh")],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            print(
+                "WARNING: synthetic showcase generation failed. "
+                "Continuing with existing artifacts.",
+                flush=True,
+            )
+        else:
+            actions_taken["generated_synthetic_showcase"] = True
 
     snapshot = build_project_snapshot(project_root)
     write_project_snapshot(snapshot, plan["snapshot_output_path"])
@@ -71,7 +79,10 @@ def main() -> int:
 
     if plan["launch_app"]:
         actions_taken["launch_app"] = True
-        subprocess.run([str(project_root / "scripts/run_app.sh")], check=True)
+        try:
+            subprocess.run([str(project_root / "scripts/run_app.sh")], check=True)
+        except subprocess.CalledProcessError:
+            print("WARNING: Streamlit app failed to launch.", flush=True)
 
     return 0
 

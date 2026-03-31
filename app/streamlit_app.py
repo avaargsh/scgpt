@@ -352,6 +352,14 @@ if not checkpoint_path.exists():
     )
     st.stop()
 
+if not model_config_path.exists():
+    st.error(f"Model config not found: `{model_config_path}`")
+    st.stop()
+
+if not train_config_path.exists():
+    st.error(f"Train config not found: `{train_config_path}`")
+    st.stop()
+
 bundle = load_bundle_cached(str(bundle_dir))
 run_summary = load_optional_json(str(run_summary_path))
 deg_metadata = load_optional_json(str(deg_metadata_path))
@@ -385,11 +393,11 @@ model = load_model_cached(
 
 if demo_mode == "synthetic":
     st.warning(
-        "Currently showing the offline synthetic showcase. Use it to validate the pipeline and UI, "
-        "not to make biological claims about real perturbation performance."
+        "**Offline synthetic demo** — for pipeline/UI validation only. "
+        "Do not cite these metrics as biological results."
     )
 else:
-    st.info("Currently showing real Norman2019 demo artifacts.")
+    st.success("**Real Norman2019 artifacts loaded** — metrics are reportable.")
 
 metadata = bundle["metadata"]
 selected_perturbation = st.sidebar.selectbox(
@@ -476,16 +484,14 @@ with inference_tab:
          topk_overlap_value = topk_overlap(predicted_top_genes, true_top_genes, topk_k)
 
  st.subheader(f"Inference: {selected_perturbation}")
- if topk_overlap_value is not None:
-     metric1, metric2, metric3, metric4 = st.columns(4)
- else:
-     metric1, metric2, metric3 = st.columns(3)
-     metric4 = None
+ metric1, metric2, metric3, metric4 = st.columns(4)
  metric1.metric("Matched Samples", batch.sample_count)
  metric2.metric("Aggregated Pearson", f"{fit_metrics['pearson']:.4f}")
  metric3.metric("Aggregated MSE", f"{fit_metrics['mse']:.4f}")
- if metric4 is not None and topk_overlap_value is not None:
-     metric4.metric(f"Top-{topk_k} DEG Overlap", f"{topk_overlap_value:.4f}")
+ metric4.metric(
+     f"Top-{topk_k} DEG Overlap",
+     f"{topk_overlap_value:.4f}" if topk_overlap_value is not None else "—",
+ )
 
  st.caption(
      "Reference control is the mean matched control profile already stored in the processed bundle "

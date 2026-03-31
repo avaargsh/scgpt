@@ -52,6 +52,12 @@ if [[ -z "${DEG_ARTIFACT}" ]]; then
     fi
 fi
 
+if [[ ! -d "${BUNDLE_DIR}" ]]; then
+    echo "[ERROR] Bundle directory not found: ${BUNDLE_DIR}" >&2
+    echo "  Run preprocessing first, e.g.: ./scripts/run_norman2019_demo.sh" >&2
+    exit 1
+fi
+
 echo "=== Full evaluation: Norman2019 bundle ==="
 echo "  bundle-dir       : ${BUNDLE_DIR}"
 echo "  deg-artifact     : ${DEG_ARTIFACT:-<none>}"
@@ -91,7 +97,8 @@ if [[ -f "${TRANSFORMER_CKPT}" ]]; then
         --error-summary-output-path "${TRANSFORMER_DIR}/unseen_test_error_summary.json" \
         $(deg_flag)
 else
-    echo "[SKIP] Transformer checkpoint not found: ${TRANSFORMER_CKPT}"
+    echo "[SKIP] Transformer checkpoint not found: ${TRANSFORMER_CKPT}" >&2
+    echo "  Train first: make train-transformer" >&2
 fi
 
 # ── MLP ───────────────────────────────────────────────────────────────────────
@@ -123,7 +130,8 @@ if [[ -f "${MLP_CKPT}" ]]; then
         --error-summary-output-path "${MLP_DIR}/mlp_unseen_test_error_summary.json" \
         $(deg_flag)
 else
-    echo "[SKIP] MLP checkpoint not found: ${MLP_CKPT}"
+    echo "[SKIP] MLP checkpoint not found: ${MLP_CKPT}" >&2
+    echo "  Train first: make train-mlp" >&2
 fi
 
 # ── XGBoost (no re-evaluation needed — metrics saved at train time) ───────────
@@ -133,7 +141,8 @@ XGB_SUMMARY="${XGB_DIR}/xgboost_run_summary.json"
 if [[ -f "${XGB_SUMMARY}" ]]; then
     echo "--- XGBoost: metrics already in ${XGB_SUMMARY} (no checkpoint to reload) ---"
 else
-    echo "[SKIP] XGBoost run summary not found: ${XGB_SUMMARY}"
+    echo "[SKIP] XGBoost run summary not found: ${XGB_SUMMARY}" >&2
+    echo "  Train first: make train-xgboost" >&2
 fi
 
 echo ""

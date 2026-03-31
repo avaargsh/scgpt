@@ -1,7 +1,8 @@
 # PerturbScope-GPT — development shortcuts
 # All targets run through uv so the virtual environment is handled automatically.
 
-.PHONY: help test lint typecheck format doctor snapshot pitch showcase demo notebooks clean
+.PHONY: help test lint typecheck format ci doctor snapshot pitch showcase demo notebooks \
+       results synthetic validate-artifacts clean
 
 UV := UV_PROJECT_ENVIRONMENT=.venv UV_CACHE_DIR=.uv-cache uv run
 PYTHON := $(UV) python
@@ -23,6 +24,12 @@ format:  ## Run ruff formatter
 
 typecheck:  ## Run mypy static type checker on src/
 	$(UV) mypy src/
+
+ci:  ## Run full local CI check (test + lint + typecheck)
+	@echo "=== tests ===" && $(UV) pytest tests/ -v \
+		&& echo "=== lint ===" && $(UV) ruff check src/ scripts/ app/ tests/ \
+		&& echo "=== typecheck ===" && $(UV) mypy src/ \
+		&& echo "=== CI passed ==="
 
 # ── Demo & data ───────────────────────────────────────────────────────────────
 doctor:  ## Inspect local project/demo readiness
@@ -70,6 +77,34 @@ deg:  ## Generate DEG artifact from the Norman2019 dataset
 		--input-path data/raw/NormanWeissman2019_filtered.h5ad \
 		--bundle-dir data/processed/norman2019_demo_bundle \
 		--output-dir artifacts/transformer_seen_norman2019_demo
+
+results:  ## Regenerate real Norman2019 result figures for README/docs
+	./scripts/run_generate_results_assets.sh
+
+synthetic:  ## Generate full offline synthetic showcase (all 3 models + figures)
+	./scripts/run_generate_synthetic_showcase.sh
+
+validate-artifacts:  ## Check that expected demo artifacts exist
+	@echo "=== Validating demo artifacts ===" && \
+	ok=true && \
+	for f in \
+	  data/processed/norman2019_demo_bundle/arrays.npz \
+	  data/processed/norman2019_demo_bundle/splits.npz \
+	  data/processed/norman2019_demo_bundle/metadata.json \
+	  artifacts/transformer_seen_norman2019_demo/best_model.pt \
+	  artifacts/transformer_seen_norman2019_demo/run_summary.json \
+	  artifacts/transformer_seen_norman2019_demo/seen_test_metrics.json \
+	  artifacts/transformer_seen_norman2019_demo/unseen_test_metrics.json \
+	  artifacts/mlp_seen_norman2019_demo/best_model.pt \
+	  artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json \
+	; do \
+	  if [ -f "$$f" ]; then \
+	    printf "  \033[32m[OK]\033[0m %s\n" "$$f"; \
+	  else \
+	    printf "  \033[31m[MISSING]\033[0m %s\n" "$$f"; ok=false; \
+	  fi; \
+	done && \
+	if $$ok; then echo "=== All artifacts present ==="; else echo "=== Some artifacts missing ==="; fi
 
 # ── Housekeeping ──────────────────────────────────────────────────────────────
 
