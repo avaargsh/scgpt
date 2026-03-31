@@ -1,309 +1,419 @@
-# PerturbScope-GPT 项目开发方案（本地开发版）
+# PerturbScope-GPT 项目设计与演进方案（2026-03 审计版）
 
-## 1. 项目定位
+## 1. 文档角色
 
-### 项目名称
-PerturbScope-GPT：基于 Transformer 的单细胞扰动响应预测与靶点优先级排序系统
+本文件不再只是“待实现功能列表”，而是当前仓库的设计基线与演进约束。
 
-### 项目目标
-构建一个面向 AI4Bio / AI4Science 求职展示的本地可运行 MVP，完成以下闭环：
+与其他文档的分工如下：
 
-1. 基于公开 Perturb-seq 单细胞数据构建稳定的数据处理 pipeline。
-2. 训练一个本地机器可运行的扰动响应预测模型。
-3. 用统一 baseline 和明确指标完成对比评估。
-4. 输出可解释的靶点优先级排序结果。
-5. 通过 Streamlit 提供交互式演示页面。
+- `README.md`：面向使用者和面试演示的运行说明、结果展示、命令入口。
+- `docs/architecture.md`：面向实现者的模块结构、数据流与 artifact 合同。
+- `PROJECT_PLAN.md`：面向项目 owner 的范围边界、阶段状态、设计决策、后续演进优先级。
 
-### 项目价值
-- 展示单细胞数据工程能力：QC、归一化、HVG、样本配对、稀疏矩阵处理。
-- 展示深度学习建模能力：Transformer、embedding 设计、训练与评估。
-- 展示 AI4Bio 应用能力：扰动建模、DEG、靶点排序。
-- 展示工程化能力：模块化代码、配置驱动、实验管理、可视化部署。
+如果实现超出本文件定义的 MVP 边界，应先更新本文件，再扩展代码与 README。
 
-### 本地开发原则
-- 单机可运行优先于大规模论文复现。
-- 先做单数据集、单细胞系、单基因扰动的稳定 MVP。
-- 先保证闭环，再扩展到更复杂的扰动或更大的数据规模。
+## 2. 审计结论
 
-## 2. 目标用户与使用场景
+基于当前仓库、配置、脚本、测试与本地 artifact 的审计，结论如下：
 
-### 目标用户
-- AI4Bio / 生信岗位面试官
-- 对 perturbation modeling 感兴趣的研究人员
-- 需要快速验证候选靶点影响的个人项目展示者
+1. 项目已经完成“本地可运行 MVP”的核心闭环，不再处于早期脚手架阶段。
+2. `Norman2019 -> preprocess -> bundle -> train -> evaluate -> rank -> Streamlit demo` 主链路已经打通。
+3. 仓库已经演进出一层明确的“求职展示 / demo 交付层”，包括：
+   - `doctor` 项目健康检查
+   - `snapshot` 项目快照导出
+   - `showcase` 现场演示准备
+   - `pitch` 面试话术生成
+   - 多 seed 汇总
+   - 误差分析与失败样本摘要
+4. 原方案文档已出现明显漂移，主要体现在：
+   - 仍以“Phase 0-4 待实施”表述当前系统
+   - 仍把 `requirements.txt` 视为关键交付物，而当前环境事实已经切换到 `uv + pyproject.toml + uv.lock`
+   - 未明确真实数据路径与 synthetic fallback 的双模式运行约束
+   - 未定义当前实际存在的 artifact 合同与演示链路
 
-### 使用场景
-- 输入 cell type 和 perturb gene，预测表达变化谱。
-- 查看关键差异基因和 Top-k 候选基因排名。
-- 对比 Transformer 与 MLP / XGBoost baseline 的效果。
+因此，本次演进目标不是扩 scope，而是把设计文档升级为与当前仓库状态一致的“交付设计文档”。
 
-## 3. 项目范围
+## 3. 当前阶段与目标交付
 
-### MVP 范围
-- 一个锁定的数据集与固定预处理 pipeline
-- 单细胞系、单基因扰动、control vs perturb 场景
-- 一个 Transformer 主模型
-- 两个 baseline：MLP、XGBoost
-- 三个核心指标：Pearson correlation、MSE、Top-k DEG overlap
-- 一个 Streamlit 演示页面
+### 当前阶段
 
-### 暂不纳入 MVP
+当前项目处于：
+
+`Phase 5：稳定性、诊断能力与演示交付打磨`
+
+这意味着：
+
+- 核心建模闭环已完成
+- 真实 Norman2019 结果已生成
+- synthetic 离线演示链路已具备
+- 当前重点从“补功能”转为“稳交付、控漂移、讲清楚”
+
+### 当前目标交付
+
+当前版本的目标不是扩展到多数据集平台，而是保持以下能力稳定、可复现、可展示：
+
+1. 在单机上复现实验环境与基础测试。
+2. 基于 `scPerturb / Norman2019` 单基因扰动子集产出标准 bundle。
+3. 训练并比较 Transformer、MLP、XGBoost。
+4. 输出 seen / unseen 两套评估、DEG overlap 与 target ranking。
+5. 在 Streamlit 中展示推理结果与误差分析。
+6. 通过 `doctor / snapshot / showcase / pitch` 完成求职场景下的演示闭环。
+
+## 4. 稳定范围与明确非目标
+
+### 4.1 MVP 稳定范围
+
+本项目稳定锁定以下范围：
+
+- 数据集：`scPerturb / Norman2019`
+- 细胞上下文：`K562`
+- 样本范围：单基因扰动
+- 对照策略：control mean
+- 目标：`delta expression`
+- 主模型：Transformer Encoder
+- baseline：MLP、XGBoost
+- 主报告粒度：`per-perturbation`
+- 必要指标：Pearson、MSE、Top-k DEG overlap
+- 演示方式：本地 Streamlit app
+
+### 4.2 明确不在当前范围内
+
+除非先更新本文件，否则不引入以下扩展：
+
 - 多数据集联合训练
-- 多基因组合扰动
+- 多基因组合扰动建模
+- 分布式训练
 - foundation model 级别预训练
-- 复杂 batch correction 方案
-- 分布式训练和完整 MLOps 平台
-- 云部署与数据库服务
+- 复杂工作流编排平台
+- 云端服务、数据库或在线 API
+- 把项目演进成通用 perturbation 平台
 
-## 4. 数据与任务定义
+## 5. 当前参考结果（本地 artifact 基线）
 
-### 4.1 锁定数据集
+以下结果来自当前仓库本地 artifact，作为当前设计基线的参考，不应与 synthetic 演示结果混用。
 
-MVP 主数据集固定为：
-- `scPerturb benchmark` 中的 `Norman2019` K562 数据，优先使用单基因扰动子集
+| Model | Unseen Pearson | Unseen MSE | Top-100 DEG Overlap | Reference Artifact |
+| --- | ---: | ---: | ---: | --- |
+| Transformer | 0.8243 | 0.00105 | 0.9755 | `artifacts/transformer_seen_norman2019_demo/run_summary.json` |
+| MLP | 0.8374 | 0.00085 | — | `artifacts/mlp_seen_norman2019_demo/run_summary.json` |
+| XGBoost | 0.8405 | 0.00084 | — | `artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json` |
 
-选择理由：
-- 社区认知度高，适合面试表达
-- 结构相对清晰，便于从公开基准进入工程实现
-- 可先使用处理后的 `AnnData` 版本，降低数据清洗复杂度
-- 数据规模适中，适合本地机器做 MVP
+Transformer 多 seed 汇总基线：
 
-纳入样本：
-- 单基因扰动样本
-- non-targeting 或 control 样本
+- seeds：`7, 21, 42`
+- unseen Pearson：`0.8304 +/- 0.0067`
+- unseen top-100 DEG overlap：`0.9850 +/- 0.0067`
+- reference：`artifacts/multi_seed_report.json`
 
-排除样本：
-- 多基因组合扰动
-- metadata 缺失严重的样本
-- 无法可靠匹配 control 的异常子集
+误差分析基线：
 
-### 4.2 数据 Pipeline
+- unseen split 当前主导 failure mode：`low_signal_condition`
+- worst Pearson perturbation：`MAP2K6`
+- worst MSE perturbation：`FOXO4`
+- reference：`artifacts/transformer_seen_norman2019_demo/unseen_test_error_summary.json`
 
-预处理主流程：
+Provenance guardrail：
+
+- 只有明确标注为 `real Norman2019` 的结果可作为生物学结果陈述。
+- synthetic artifact 仅用于离线演示、UI 验证和无网络场景下的产品展示。
+
+## 6. 运行模式设计
+
+### 6.1 Real Norman2019 模式
+
+这是主路径，也是可报告真实结果的路径。
+
+主流程：
 
 ```text
-raw / benchmark AnnData
-  -> metadata sanity check
-  -> filter low quality cells / genes
-  -> normalize_total
-  -> log1p
-  -> highly_variable_genes
-  -> keep sparse matrix through preprocessing
-  -> build control mean by batch / cell type
-  -> create delta expression targets
-  -> seen / unseen split
-  -> export processed tensors and metadata
+download raw h5ad
+  -> inspect schema
+  -> preprocess to processed bundle
+  -> train transformer / baselines
+  -> evaluate seen + unseen
+  -> generate DEG artifact and figures
+  -> launch Streamlit using real artifacts
 ```
 
-核心产物：
-- 原始 `AnnData`
-- HVG 子集表达矩阵
-- control 均值向量
-- `gene_to_idx` 与 `perturb_to_idx`
-- train / val / test split 索引
-- 用于训练的张量文件或中间表
+默认关键路径：
 
-### 4.3 稀疏矩阵策略
+- raw file：`data/raw/NormanWeissman2019_filtered.h5ad`
+- bundle：`data/processed/norman2019_demo_bundle`
+- transformer artifacts：`artifacts/transformer_seen_norman2019_demo`
 
-scRNA-seq 数据天然稀疏，MVP 采用以下规则：
+### 6.2 Synthetic Offline Showcase 模式
 
-1. `AnnData.X` 在读取、QC、归一化、HVG 选择阶段保持 sparse。
-2. 仅在 `HVG` 子集完成后，将当前样本切片转为 `float32 dense tensor`。
-3. dense 转换仅发生在训练导出阶段，不在原始预处理中提前 densify。
-4. 若内存不足，优先降低 `HVG` 数量和每个 perturbation 的采样上限，而不是直接扩模型。
+这是在原始数据不可用、网络不可用或只需要离线演示工程链路时的 fallback。
 
-### 4.4 Control / Perturb 配对策略
+主流程：
 
-MVP 采用最稳定、最适合本地开发的配对方式：
+```text
+generate synthetic bundle
+  -> train transformer / baselines on synthetic data
+  -> export figures and demo artifacts
+  -> launch Streamlit using synthetic artifacts
+```
 
-- 只建模单基因扰动
-- 对每个 batch 内的 control cells 计算平均表达向量
-- 若 batch 信息不可用，则退化为同 cell type / cell line 下的全局 control 均值
-- 每个 perturbed cell 的目标定义为：
+默认关键路径：
+
+- bundle：`data/processed/synthetic_demo_bundle`
+- transformer artifacts：`artifacts/transformer_seen_synthetic_demo`
+
+### 6.3 App 默认选择逻辑
+
+Streamlit 默认行为保持如下：
+
+1. 优先加载 real Norman2019 bundle / artifact。
+2. 若 real artifact 不存在，则自动退化到 synthetic bundle / artifact。
+3. UI 必须明确显示当前加载的是 `real` 还是 `synthetic`，避免结果混用。
+
+## 7. 架构与模块边界
+
+### 7.1 模块职责
+
+```text
+src/data
+  io.py              AnnData / JSON 读写
+  schema.py          Norman2019 schema 自动解析与 canonicalization
+  preprocess.py      QC / normalize / log1p / HVG / local-first subsampling
+  pairing.py         control-mean pairing、bundle 构建与 split 导出
+  torch_dataset.py   PyTorch dataset
+  synthetic.py       synthetic demo 数据生成
+
+src/models
+  transformer.py     主模型
+  mlp.py             baseline
+  xgboost_baseline.py baseline
+
+src/training
+  losses.py
+  trainer.py
+
+src/evaluation
+  metrics.py         Pearson / MSE / top-k overlap
+  deg.py             DEG artifact 生成与读取
+  inference.py       saved model 推理与 app 数据拼装
+  error_analysis.py  per-perturbation 误差表与 failure summary
+
+src/ranking
+  target_ranking.py  目标排序
+
+src/utils
+  config.py
+  logger.py
+  seed.py
+  comparison.py
+  experiment.py
+  multiseed.py
+  project_health.py
+  project_snapshot.py
+  showcase.py
+  interview_script.py
+
+scripts
+  thin CLI wrappers only
+
+app
+  streamlit_app.py   UI only, no training logic
+```
+
+### 7.2 边界约束
+
+- UI 不包含训练逻辑。
+- `scripts/` 只编排 `src/`，不复制业务逻辑。
+- 模型层不直接读 raw 文件。
+- ranking 不使用 attention 作为正式评分项。
+- 误差分析是诊断工具，不作为新的科学主结论来源。
+- 文档中所有默认路径和行为必须可由 config 或 artifact 解析得到。
+
+## 8. 数据设计与 artifact 合同
+
+### 8.1 原始数据与 schema 约束
+
+原始输入固定为 `.h5ad`：
+
+- 默认文件：`data/raw/NormanWeissman2019_filtered.h5ad`
+- 默认数据源：`scPerturb benchmark`
+
+schema 自动解析遵循 `configs/data.yaml` 中的 preset 与候选列规则，重点包括：
+
+- perturbation 列自动识别
+- control label canonicalization
+- batch 列自动识别
+- context 列自动识别
+- 多基因扰动字符串归一化后过滤
+
+### 8.2 预处理默认配置
+
+当前设计基线与配置保持一致：
+
+- `min_genes_per_cell = 200`
+- `min_cells_per_gene = 3`
+- `normalize_total_target_sum = 10000`
+- `log1p = true`
+- `hvg_top_genes = 512`
+- `hvg_upper_bound = 800`
+- `max_cells_per_perturbation = 500`
+- `sparse_to_dense_after_hvg = true`
+
+内存 guardrail 仍然维持：
+
+- 推荐 HVG 区间：`512-800`
+- 未做内存估算前不超过 `1000`
+- 资源不足时优先下调 `HVG -> batch size -> model depth`
+
+### 8.3 配对与目标定义
+
+当前 MVP 的训练目标固定为：
 
 ```text
 delta_expression = perturbed_expression - matched_control_mean
 ```
 
-这样做的原因：
-- 避免逐 cell 配对带来的噪声和组合爆炸
-- 训练目标稳定
-- 更适合本地机器做首版回归任务
+control mean 的选择顺序：
 
-## 5. 建模方案
+1. batch-aware control mean
+2. global control mean within cell context
 
-### 5.1 任务定义
+这一定义同时约束：
 
-模型输入：
-- control mean expression vector
-- perturb gene id
+- 训练目标
+- 推理输出含义
+- DEG overlap 的比较对象
+- target ranking 的数值基础
 
-模型输出：
-- predicted delta expression
+### 8.4 Processed Bundle 合同
 
-理由：
-- 比直接预测 perturbed expression 更适合 perturbation response 建模
-- 与 control / perturb 配对策略天然一致
+标准 processed bundle 目录至少包含：
 
-### 5.2 Transformer 架构决策
+- `arrays.npz`
+  - `control_expression`
+  - `target_delta`
+  - `perturbation_index`
+  - `sample_ids`
+- `splits.npz`
+  - `seen_train`
+  - `seen_val`
+  - `seen_test`
+  - `unseen_train`
+  - `unseen_val`
+  - `unseen_test`
+- `metadata.json`
+  - `gene_names`
+  - `perturbation_names`
 
-MVP 采用本地优先架构：
+这个合同由 `src/data/pairing.py` 与 `src/data/torch_dataset.py` 共同约束，后续如需扩字段，必须保持向后兼容或同步更新加载逻辑。
 
-```text
-gene identity embedding
-+ expression value projection
-+ perturbation embedding
--> Transformer Encoder
--> MLP regression head
--> predicted delta expression
-```
+### 8.5 训练与评估 artifact 合同
 
-其中每个 gene token 的表示为：
+以 Transformer 为例，标准 artifact 目录应包含：
 
-```text
-token_i =
-  gene_embedding_i
-+ value_projection(control_expression_i)
-+ perturbation_embedding(p)
-```
+- `best_model.pt`
+- `history.json`
+- `seen_test_metrics.json`
+- `unseen_test_metrics.json`
+- `seen_test_per_perturbation.csv`
+- `unseen_test_per_perturbation.csv`
+- `seen_test_error_summary.json`
+- `unseen_test_error_summary.json`
+- `run_summary.json`
 
-关键决策：
-- 基因视为 token
-- `perturbation embedding` 直接加到每个 gene token 上
-- 不使用 special token
-- 不使用 cross-attention
-- 先不用更复杂的条件注入方式
+如生成 DEG 相关结果，还应包含：
 
-这样做的原因：
-- 结构最简单
-- 参数量可控
-- 训练更稳定
-- 便于面试清楚解释
+- `deg_artifact.csv`
+- `deg_artifact_metadata.json`
 
-### 5.3 序列长度与显存控制
+跨 run 汇总 artifact：
 
-标准 self-attention 为 `O(n^2)`，因此本地开发必须先限制输入规模。
+- `artifacts/multi_seed_report.json`
+- `artifacts/project_snapshot.json`
 
-MVP 建议配置：
-- 默认 `HVG = 512`
-- 推荐工作区间 `512 ~ 800`
-- 未做显存估算前，不超过 `1000`
+### 8.6 文档与图像 artifact 合同
 
-推荐第一版模型参数：
+当前 docs 目录内的演示资产已经成为交付物的一部分，应继续维护：
+
+- `docs/architecture.md`
+- `docs/datasets/norman2019.md`
+- `docs/assets/model_comparison_seen_norman2019_demo.png`
+- `docs/assets/transformer_inference_preview.png`
+- `docs/assets/transformer_error_analysis_preview.png`
+- `docs/assets/model_comparison_seen_synthetic_demo.png`
+- `docs/assets/transformer_inference_preview_synthetic_demo.png`
+
+这些资产的作用是：
+
+- 支持 README 展示
+- 支持 `snapshot / showcase / pitch`
+- 支持面试时快速打开静态图示
+
+## 9. 建模、评估与诊断设计
+
+### 9.1 Transformer 设计决策
+
+保持以下设计不变：
+
+- gene 视为 token
+- control expression 通过 scalar projection 注入
+- perturbation embedding 以 additive 方式广播到所有 gene token
+- 默认不使用 positional encoding
+- 输出目标为 `delta expression`
+
+默认超参数：
+
 - `d_model = 128`
 - `n_heads = 4`
 - `n_layers = 2`
 - `ffn_dim = 256`
 - `dropout = 0.1`
-- `batch_size = 16`
 
-扩容策略：
-- 先放大数据量，再放大模型
-- 若显存不足，优先减 `HVG`、`batch_size`、`n_layers`
-- 不在 MVP 阶段引入 Performer / linear attention，除非标准 attention 已被证明确实不可运行
+### 9.2 Baseline 设计
 
-### 5.4 Positional Encoding 决策
+- MLP：低复杂度深度学习 baseline
+- XGBoost：传统机器学习 baseline
 
-基因没有天然序列顺序，因此：
+baseline 的目标是建立可比对照，不是抢占项目范围。
 
-- MVP 默认 `不使用位置编码`
-- 固定基因顺序为保存下来的 `HVG index`
-- 基因身份由 `gene embedding` 表达，而不是位置编码表达
+### 9.3 评估规则
 
-若后续做扩展实验，可将可学习位置编码作为对照实验，而不是默认方案。
+必须继续明确区分：
 
-### 5.5 Loss
+- `seen split`
+- `unseen split`
 
-主损失：
+主指标粒度：
 
-```text
-MSE Loss
-```
-
-可选正则：
-
-```text
-MSE Loss + lambda * L1
-```
-
-说明：
-- `L1` 仅作轻量正则，不改变主任务定义
-- 最优 checkpoint 以验证集主指标保存
-
-## 6. Baseline 方案
-
-### 6.1 MLP
-- 输入：`control expression + perturbation embedding`
-- 输出：predicted delta expression
-
-### 6.2 XGBoost
-- 作为传统机器学习 baseline
-- 第一版以聚合任务或逐基因回归的轻量方式实现
-- 目标是提供对照，而不是追求最优复杂实现
-
-## 7. 评估方案
-
-### 7.1 指标粒度
-
-必须明确区分粒度。
-
-主报告粒度：
 - `per-perturbation`
 
-定义：
-- 对同一 perturbation condition 的预测结果求均值
-- 将该均值向量与真实均值向量在所有基因上比较
-- 计算 Pearson correlation 和 MSE
+必要指标：
 
-辅助粒度：
-- `per-gene`
-- `per-cell` 仅作补充分析，不作为主报告指标
-
-### 7.2 核心指标
 - Pearson correlation
-- Mean Squared Error
+- MSE
 - Top-k DEG overlap
 
-### 7.3 DEG 定义
+默认 top-k：
 
-真实 DEG 统一定义为：
-- 使用 `scanpy.tl.rank_genes_groups`
-- 统计方法：`wilcoxon`
-- 阈值：
-  - `adjusted p-value < 0.05`
-  - `abs(logfoldchange) > 0.25`
+- `20`
+- `50`
+- `100`
 
-Top-k 真实 DEG 生成方式：
-- 先按上述阈值筛选
-- 再按统计 score 排序取前 `k`
+### 9.4 DEG 定义
 
-Top-k 预测 DEG 生成方式：
-- 按 `abs(predicted_delta_expression)` 排序取前 `k`
+MVP 默认 DEG 逻辑固定为：
 
-### 7.4 数据切分策略
+- `scanpy.tl.rank_genes_groups`
+- `method = wilcoxon`
+- `adjusted p-value < 0.05`
+- `abs(logfoldchange) > 0.25`
 
-MVP 明确保留两套评估协议：
+若改变阈值或方法，必须同步更新：
 
-1. `seen perturbation split`
-   - 在每个 perturbation condition 内做分层切分
-   - 用于快速验证模型是否学到基本映射
+- `configs/train.yaml`
+- `README.md`
+- 本文档
 
-2. `unseen perturbation split`
-   - 以 perturbation gene 为 group 切分
-   - 某个 perturbation 只能出现在 train / val / test 其中一个 split
-   - 用于评估对未见扰动的泛化
+### 9.5 Ranking 公式
 
-实施顺序：
-- Phase 2 先跑 `seen split`
-- Phase 3 再补 `unseen split`
-
-## 8. Target Ranking 方案
-
-### 8.1 Ranking 原则
-
-attention 权重不作为 ranking 输入，只作为模型内部可视化参考。
-
-MVP 的 `importance_score` 定义为：
+正式 ranking 仍固定为：
 
 ```text
 importance_score =
@@ -317,289 +427,155 @@ importance_score =
 deg_significance = -log10(adjusted_p_value + 1e-12)
 ```
 
-并对两个分量分别做归一化后再相加。
+约束：
 
-### 8.2 设计理由
-- 消除 attention 解释和 ranking 公式的矛盾
-- score 含义更清晰
-- 更适合求职项目中的可解释表达
-
-### 8.3 后续扩展
-
-如果后续需要调权重：
-- 默认等权
-- 可在验证集上做简单 grid search
-- 任何权重调整必须写入配置和文档
-
-## 9. 推荐工程结构
-
-```text
-PerturbScope-GPT/
-├── AGENTS.md
-├── PROJECT_PLAN.md
-├── README.md
-├── requirements.txt
-├── configs/
-│   ├── data.yaml
-│   ├── model.yaml
-│   └── train.yaml
-├── data/
-│   ├── raw/
-│   ├── interim/
-│   └── processed/
-├── notebooks/
-│   ├── 01_data_exploration.ipynb
-│   └── 02_model_debug.ipynb
-├── src/
-│   ├── __init__.py
-│   ├── data/
-│   │   ├── io.py
-│   │   ├── preprocess.py
-│   │   ├── pairing.py
-│   │   └── torch_dataset.py
-│   ├── models/
-│   │   ├── transformer.py
-│   │   ├── mlp.py
-│   │   └── xgboost_baseline.py
-│   ├── training/
-│   │   ├── trainer.py
-│   │   └── losses.py
-│   ├── evaluation/
-│   │   ├── metrics.py
-│   │   └── deg.py
-│   ├── ranking/
-│   │   └── target_ranking.py
-│   └── utils/
-│       ├── config.py
-│       ├── logger.py
-│       └── seed.py
-├── app/
-│   └── streamlit_app.py
-├── scripts/
-│   ├── preprocess_data.py
-│   ├── train_transformer.py
-│   ├── train_baselines.py
-│   └── evaluate_model.py
-└── tests/
-    ├── test_dataset.py
-    ├── test_metrics.py
-    └── test_ranking.py
-```
-
-## 10. 分阶段开发计划
-
-### Phase 0：项目初始化
-目标：建立本地可持续迭代的工程骨架。
-
-交付物：
-- 目录结构
-- `README.md`
-- `requirements.txt`
-- `configs/*.yaml`
-- `AGENTS.md`
-
-完成标准：
-- 本地环境可创建并安装依赖
-- 配置文件能表达数据、模型、训练三类参数
-
-### Phase 1：数据 Pipeline
-目标：从 `scPerturb/Norman2019` 稳定生成训练样本。
-
-任务：
-- 读取 benchmark 数据和 metadata
-- 实现 QC、归一化、log1p、HVG
-- 保持 sparse 直到导出阶段
-- 建立 control mean 配对逻辑
-- 导出 `delta expression` 训练数据
-
-交付物：
-- `src/data/preprocess.py`
-- `src/data/pairing.py`
-- `src/data/torch_dataset.py`
-- `scripts/preprocess_data.py`
-
-完成标准：
-- 同一输入重复运行结果一致
-- 样本维度、基因索引、扰动标签映射可追踪
-- 输出能在本地被 DataLoader 直接读取
-
-### Phase 2：模型与训练
-目标：在本地机器上跑通 Transformer 与 baseline。
-
-任务：
-- 实现 `torch Dataset` 和 `DataLoader`
-- 实现最小 Transformer
-- 实现 MLP baseline
-- 实现 XGBoost baseline
-- 保存 checkpoint 与训练日志
-
-交付物：
-- `src/models/transformer.py`
-- `src/models/mlp.py`
-- `src/models/xgboost_baseline.py`
-- `src/training/trainer.py`
-- `scripts/train_transformer.py`
-
-完成标准：
-- `seen split` 至少成功训练一轮以上
-- 产出验证集指标和最优 checkpoint
-- 模型参数规模适合本地机器反复调试
-
-### Phase 3：评估与 Ranking
-目标：完成可解释、可比较的结果输出。
-
-任务：
-- 实现 per-perturbation Pearson 和 MSE
-- 实现 Top-k DEG overlap
-- 增加 `unseen perturbation split`
-- 输出 gene importance ranking
-
-交付物：
-- `src/evaluation/metrics.py`
-- `src/evaluation/deg.py`
-- `src/ranking/target_ranking.py`
-- `scripts/evaluate_model.py`
-
-完成标准：
-- 指标定义清晰且结果可复现
-- ranking 字段含义明确
-- 报告 seen / unseen 两类评估结果
-
-### Phase 4：可视化与演示
-目标：将研究型结果整理成求职可展示的 demo。
-
-任务：
-- 构建 Streamlit 应用
-- 加载 saved model 和 ranking 结果
-- 展示预测表达变化、DEG、target ranking
-- 增加基础图表和错误处理
-
-交付物：
-- `app/streamlit_app.py`
-
-完成标准：
-- 用户可完成一次端到端推理
-- 页面能清楚展示模型能力和局限性
-
-## 11. 里程碑与验收
-
-### M1：数据可用
-- 能从目标数据集生成 processed dataset
-- control mean、gene index、perturb index 均被持久化
-
-### M2：模型可训
-- Transformer 和至少一个 baseline 跑通
-- 在 `seen split` 上输出可解释指标
-
-### M3：泛化可评估
-- 在 `unseen split` 上输出结果
-- 明确 seen / unseen 的差异
-
-### M4：项目可展示
-- Streamlit demo 可运行
-- 文档足以支持面试表达
-
-## 12. 关键技术决策
-
-### 决策 1：数据集固定
-- 固定为 `scPerturb / Norman2019` 单基因扰动子集
-
-### 决策 2：任务目标固定
-- 预测 `delta expression`
-
-### 决策 3：条件注入方式固定
-- `perturbation embedding` 加到每个 gene token 上
-
-### 决策 4：位置编码固定
-- MVP 默认不用位置编码
-
-### 决策 5：指标主粒度固定
-- 主指标按 `per-perturbation`
-
-### 决策 6：切分协议固定
-- 先 `seen split`
-- 后 `unseen perturbation split`
-
-### 决策 7：ranking 公式固定
 - 不使用 attention score
-- 默认等权融合 `abs_delta` 与 `deg_significance`
+- 权重变更必须配置化
+- 文档必须说明每个分量的含义
 
-## 13. 本地开发默认配置
+### 9.6 误差分析设计
 
-建议以以下配置作为第一版起点：
+误差分析已成为当前版本的重要诊断层，但其角色必须继续限定：
 
-```text
-dataset: scPerturb / Norman2019 single-gene subset
-HVG: 512
-d_model: 128
-n_heads: 4
-n_layers: 2
-batch_size: 16
-epochs: 20
-target: delta_expression
-position_encoding: false
-perturbation_injection: additive_to_all_gene_tokens
-```
+- 目标：帮助理解失败模式与准备 demo 讲解
+- 形式：per-perturbation error table + summary JSON
+- failure mode：启发式标签，不是统计学新发现
 
-如果本地机器配置较弱：
-- 先把 `HVG` 降到 `256`
-- 将 `batch_size` 降到 `8`
-- 先只用部分 perturbation 条件跑通流程
+当前 failure mode 启发式包括：
 
-## 14. 风险与应对
+- `low_sample_support`
+- `low_signal_condition`
+- `directional_mismatch`
+- `underestimates_response_magnitude`
+- `overestimates_response_magnitude`
+- `high_residual_condition`
+- `mostly_aligned`
 
-### 风险 1：数据格式与 metadata 不统一
-应对：
-- 只锁定一个主数据集
-- 将数据读取和预处理解耦
+## 10. Demo 与交付层设计
 
-### 风险 2：本地算力不足
-应对：
-- 控制 `HVG` 上限
-- 限制模型深度和 batch size
-- 先跑 `seen split` 和小样本子集
+### 10.1 Streamlit App
 
-### 风险 3：结果不稳定
-应对：
-- 固定随机种子
-- 固定配置文件
-- 记录 split 索引和预处理参数
+App 当前是正式交付面，不只是调试 UI。必须保持以下行为：
 
-### 风险 4：项目漂移成“大而全论文复现”
-应对：
-- 只做单数据集 MVP
-- 先闭环数据、模型、评估、demo 四部分
-- 任何新增复杂模块必须先更新 `PROJECT_PLAN.md`
+- 加载已保存 checkpoint，不在启动时训练
+- 允许用户选择 perturbation
+- 展示 predicted vs observed delta
+- 展示 target ranking
+- 存在 DEG artifact 时显示 DEG 相关结果
+- 存在 multi-seed report 时展示稳定性摘要
+- 存在 error summary / per-perturbation CSV 时展示 split 级与 condition 级失败分析
 
-## 15. Definition of Done
+### 10.2 CLI 交付链路
 
-满足以下条件，项目第一版即完成：
+以下命令已是当前产品化交付的一部分：
 
-1. 能从 `scPerturb / Norman2019` 生成 processed dataset。
-2. Transformer 与至少一个 baseline 能训练并输出验证结果。
-3. 能计算 per-perturbation Pearson、MSE、Top-k DEG overlap。
-4. 能输出一份定义清晰的 target ranking 表。
-5. Streamlit 页面可完成一次完整推理展示。
-6. 所有关键决策均有文档记录，且适合本地机器复现。
+- `./scripts/run_doctor.sh`
+- `./scripts/run_snapshot.sh`
+- `./scripts/run_showcase.sh`
+- `./scripts/run_pitch.sh`
+- `./scripts/run_app.sh`
 
-## 16. 面试表达建议
+这些命令的职责：
 
-建议按以下顺序介绍：
+- `doctor`：检查仓库、环境、demo artifact、真实结果是否就绪
+- `snapshot`：导出面试友好的项目快照
+- `showcase`：生成现场演示计划
+- `pitch`：生成面试表达脚本
+- `app`：直接启动产品界面
 
-1. 问题定义：基于单细胞扰动数据预测基因表达响应。
-2. 数据工程：Norman2019、HVG、稀疏矩阵处理、control mean 配对。
-3. 建模选择：为何用 Transformer，为什么本地版先把 HVG 控制在 512 到 800。
-4. 架构细节：扰动 embedding 如何注入、为何不使用位置编码。
-5. 评估设计：per-perturbation 指标、seen / unseen 切分。
-6. 可解释性：DEG 与 ranking，不把 attention 当因果证据。
-7. 工程化：配置驱动、模块边界、Streamlit demo。
+### 10.3 质量门槛
 
-## 17. 下一步建议
+当前仓库的“可展示”不再只等于“代码能跑”，还要求：
 
-优先执行顺序：
+- README 与配置一致
+- `PROJECT_PLAN.md` 与实际模块边界一致
+- 基础测试通过
+- app 能在 artifact 缺失时给出明确错误
+- real / synthetic provenance 不混用
 
-1. 搭建目录结构、`README.md`、`requirements.txt`、`configs/*.yaml`
-2. 实现 `preprocess.py + pairing.py + torch_dataset.py`
-3. 用 `HVG=512` 跑通第一个 Transformer baseline
-4. 补齐评估与 ranking
-5. 最后接 Streamlit demo
+## 11. 阶段演进与后续优先级
+
+### 11.1 已完成阶段
+
+以下阶段可视为已完成：
+
+- Phase 0：项目初始化与环境切换到 `uv`
+- Phase 1：Norman2019 预处理与 bundle 导出
+- Phase 2：Transformer / MLP / XGBoost 训练闭环
+- Phase 3：seen / unseen 评估、DEG overlap、ranking
+- Phase 4：Streamlit demo 与基础结果图
+
+### 11.2 当前阶段（Phase 5）
+
+当前继续推进但仍应严格控 scope 的内容：
+
+1. 稳定性
+   - 保持多 seed 汇总可复现
+   - 保持 error analysis 结构稳定
+2. 交付一致性
+   - 让 README、`PROJECT_PLAN.md`、`docs/architecture.md` 对同一系统做出一致描述
+3. 演示质量
+   - 保持 real / synthetic 的 UI 明确区分
+   - 保持 `snapshot / showcase / pitch` 输出可信
+
+### 11.3 下一步建议
+
+下一阶段优先做以下“小而稳”的增强，而不是扩展到新平台：
+
+1. 继续完善 error-analysis 资产和结果图，但不把它升级为复杂解释平台。
+2. 让 real-data 全流程重跑说明更顺滑，减少首次复现摩擦。
+3. 补充更明确的 artifact 生成顺序与依赖说明。
+4. 在不扩 scope 的前提下，打磨 demo 体验与讲述一致性。
+
+## 12. 风险与控制策略
+
+### 风险 1：文档再次漂移
+
+控制：
+
+- 所有 substantial change 必须同步审查 `README.md`、`PROJECT_PLAN.md`、相关 config。
+- 若变更影响架构或 artifact 合同，必须同步更新 `docs/architecture.md`。
+
+### 风险 2：真实结果与 synthetic 演示混用
+
+控制：
+
+- 所有文档与 UI 明确标注 provenance。
+- 不允许用 synthetic 数值陈述生物学性能。
+
+### 风险 3：本地资源不足导致流程脆弱
+
+控制：
+
+- 保持 local-first 默认配置。
+- 优先缩小 HVG、batch size、模型深度，而不是引入新型注意力机制。
+
+### 风险 4：为了“更像平台”而扩 scope
+
+控制：
+
+- 继续坚持单数据集、单机、单基因扰动 MVP。
+- 新增重大 subsystem 前，先更新本文件的 scope 与验收标准。
+
+## 13. 当前版本 Definition of Done
+
+当前版本可视为“稳定 MVP”的条件如下：
+
+1. `Norman2019` 单基因路径可稳定生成 processed bundle。
+2. Transformer、MLP、XGBoost 均可在标准 bundle 上产出结构化结果。
+3. seen / unseen 评估、Top-k DEG overlap、ranking 均有明确 artifact。
+4. Streamlit 能加载 real 或 synthetic artifact，并明确 provenance。
+5. `doctor / snapshot / showcase / pitch` 能辅助完成一次完整演示。
+6. `README.md`、`PROJECT_PLAN.md`、配置文件对系统边界与默认行为描述一致。
+
+## 14. 变更原则
+
+后续所有设计变更按以下顺序决策：
+
+1. 正确性
+2. 可复现性
+3. 本地可运行性
+4. 简洁性
+5. 可扩展性
+
+不为了“更先进”牺牲可讲清楚、可跑通、可交付。

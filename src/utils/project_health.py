@@ -222,6 +222,12 @@ def collect_project_health(project_root: str | Path = ".") -> dict[str, Any]:
                 relative_path="docs/assets/transformer_inference_preview.png",
                 message="Real-data app preview figure.",
             ),
+            _make_check(
+                project_root=root,
+                name="real_error_analysis_figure",
+                relative_path="docs/assets/transformer_error_analysis_preview.png",
+                message="Real-data error-analysis preview figure.",
+            ),
         ],
         "comparison_artifacts": [
             _make_check(

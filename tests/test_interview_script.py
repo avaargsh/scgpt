@@ -38,6 +38,7 @@ def _create_snapshot_backing_files(root: Path) -> None:
         "notebooks/02_model_comparison.ipynb",
         "docs/assets/model_comparison_seen_norman2019_demo.png",
         "docs/assets/transformer_inference_preview.png",
+        "docs/assets/transformer_error_analysis_preview.png",
         "docs/assets/model_comparison_seen_synthetic_demo.png",
         "docs/assets/transformer_inference_preview_synthetic_demo.png",
     ]:

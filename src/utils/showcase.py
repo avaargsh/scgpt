@@ -78,6 +78,10 @@ def format_showcase_report(
         [
             f"Show real comparison figure: {assets['real_comparison_figure']['path']}",
             f"Show inference preview: {assets['real_inference_figure']['path']}",
+            (
+                "Show error-analysis preview: "
+                f"{assets['real_error_analysis_figure']['path']}"
+            ),
             "Open Streamlit and walk through one perturbation end-to-end",
         ]
     )

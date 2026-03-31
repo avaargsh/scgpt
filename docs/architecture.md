@@ -2,111 +2,166 @@
 
 ## Overview
 
-PerturbScope-GPT is a local-first machine learning pipeline for predicting
-single-cell perturbation responses. Given the control expression profile of a
-cell and a perturbation gene label, the model predicts the **delta expression**
-(perturbed minus control, per gene) across all highly variable genes.
+PerturbScope-GPT is a local-first single-cell perturbation modeling MVP.
+Given a control expression profile and a perturbation gene label, the system
+predicts **delta expression** across highly variable genes, evaluates the
+result on seen and unseen perturbations, and exposes the artifacts in a
+Streamlit demo.
 
-```
-raw .h5ad  →  preprocessing  →  bundle  →  training  →  artifacts  →  app
+The project now has two explicit operating modes:
+
+- `real_norman2019`: the main path for reportable biological results
+- `synthetic_fallback`: an offline demo path for UI and pipeline validation
+
+```text
+raw .h5ad or synthetic generator
+  -> preprocessing
+  -> processed bundle
+  -> train / evaluate
+  -> artifacts + figures
+  -> Streamlit app + demo tooling
 ```
 
----
+## Operating Modes
+
+### 1. Real Norman2019 mode
+
+Primary data path:
+
+- raw file: `data/raw/NormanWeissman2019_filtered.h5ad`
+- processed bundle: `data/processed/norman2019_demo_bundle`
+- default Transformer artifacts: `artifacts/transformer_seen_norman2019_demo`
+
+This is the only mode whose metrics should be cited as real biological results.
+
+### 2. Synthetic fallback mode
+
+Offline demo path:
+
+- processed bundle: `data/processed/synthetic_demo_bundle`
+- default Transformer artifacts: `artifacts/transformer_seen_synthetic_demo`
+
+This path exists for offline demos, smoke tests, and product validation. Its
+metrics must not be mixed with real Norman2019 results.
+
+### 3. Streamlit selection behavior
+
+`app/streamlit_app.py` resolves demo paths in this order:
+
+1. real bundle / artifact if present
+2. synthetic bundle / artifact if real assets are missing
+
+The UI must continue to surface whether the current session is using real or
+synthetic artifacts.
 
 ## Data Flow
 
-### 1. Raw data
+### 1. Input data
 
-Input: `NormanWeissman2019_filtered.h5ad` (K562, ~111,000 cells before
-filtering, single-gene and multi-gene conditions).
+The main dataset is `NormanWeissman2019_filtered.h5ad` from the `scPerturb`
+benchmark, restricted to the K562 single-gene perturbation MVP path.
 
-### 2. Preprocessing (`src/data/`)
+Schema resolution is automatic and controlled by `configs/data.yaml` plus
+`src/data/schema.py`. The preprocessing pipeline resolves:
 
-| Step | Implementation |
-|---|---|
-| Filter cells and genes | min 200 genes/cell, 3 cells/gene |
-| Normalize | library-size normalize to 10,000 counts/cell |
-| Log-transform | `log1p` |
-| HVG selection | top 512 highly variable genes (scanpy) |
-| Sparse → dense | after HVG slicing, for training efficiency |
-| Control mean | batch-aware (or global fallback) per perturbation condition |
-| Delta expression | `perturbed_cell - control_mean` per gene |
-| Split | seen (stratified within condition) / unseen (held-out conditions) |
+- perturbation column
+- control label
+- batch column
+- context columns
+- multi-gene label canonicalization
 
-Output: `data/processed/<bundle_name>/` — a `.npz` archive of control
-expression, delta expression, perturbation indices, and associated metadata
-(gene list, perturbation map, split indices).
+### 2. Preprocessing
 
-### 3. Model training (`src/training/`)
+Implemented in `src/data/preprocess.py` and orchestrated by
+`scripts/preprocess_data.py`.
 
-Three model classes share the same training contract:
+Current default steps:
 
-| Model | File |
-|---|---|
-| Transformer | `src/models/transformer.py` |
-| MLP baseline | `src/models/mlp.py` |
-| XGBoost baseline | `src/models/xgboost_baseline.py` |
+| Step | Default |
+| --- | --- |
+| Filter cells | `min_genes_per_cell = 200` |
+| Filter genes | `min_cells_per_gene = 3` |
+| Normalize | `normalize_total(target_sum=10000)` |
+| Log transform | `log1p` |
+| HVG selection | top `512` genes |
+| Local-first cap | `max_cells_per_perturbation = 500` |
+| Sparse policy | keep sparse until post-HVG export |
 
-Checkpoints and JSON metrics land in `artifacts/<run_name>/`.
+### 3. Pairing and target construction
 
-### 4. Evaluation (`src/evaluation/`)
+Implemented in `src/data/pairing.py`.
 
-- Pearson correlation (per-perturbation mean)
-- MSE (per-perturbation mean)
-- Top-k DEG overlap: predicted top-k genes vs. Wilcoxon DEG results from scanpy
+The MVP target is fixed to:
 
-### 5. Streamlit app (`app/`)
-
-Loads a saved checkpoint, runs aggregated inference for a selected perturbation,
-and displays:
-- predicted vs. observed delta expression scatter
-- top predicted genes
-- target ranking combining predicted delta with DEG significance
-- top-k DEG overlap chart
-
----
-
-## Transformer Model
-
-**File:** `src/models/transformer.py` — `TransformerPerturbationModel`
-
-### Architecture
-
-```
-Input: control_expression  [B, G]   (G = 512 HVGs)
-       perturbation_index  [B]      (integer label)
-
-Gene token construction (per gene g):
-  gene_token[g] = gene_embedding[g]          # learnable gene ID embedding
-               + value_encoder(expr[g])       # linear projection of scalar value
-               + perturbation_embedding[p]    # perturbation conditioning (additive)
-
-Encoder:
-  2× TransformerEncoderLayer
-     d_model=128, n_heads=4, ffn_dim=256
-     activation=GELU, pre-norm (norm_first=True)
-
-Output head (per gene):
-  LayerNorm → Linear(128 → 1) → squeeze
-
-Output: predicted delta_expression  [B, G]
+```text
+delta_expression = perturbed_expression - matched_control_mean
 ```
 
-### Design choices
+Control means are resolved in this order:
 
-- **No positional encoding** — gene order has no inherent meaning in scRNA-seq.
-- **Additive perturbation injection** — the perturbation embedding is broadcast
-  to all gene tokens; this gives every gene equal access to the perturbation
-  identity without a dedicated `[CLS]` token.
-- **Pre-norm Transformer** — `norm_first=True` improves gradient flow for
-  shallow (2-layer) models.
-- **Output target = delta expression** — simplifies loss (MSE on delta) and
-  makes evaluation directly comparable across perturbations.
+1. batch-aware control mean
+2. global control mean within cell context
 
-### Default hyperparameters (`configs/model.yaml`)
+### 4. Split protocols
+
+The processed bundle always exports both split families:
+
+- `seen_*`: stratified within perturbation condition
+- `unseen_*`: grouped by perturbation identity
+
+This keeps fast in-condition validation and held-out perturbation
+generalization in the same bundle contract.
+
+## Processed Bundle Contract
+
+`src/data/pairing.py` writes a standard processed bundle directory:
+
+### `arrays.npz`
+
+- `control_expression`
+- `target_delta`
+- `perturbation_index`
+- `sample_ids`
+
+### `splits.npz`
+
+- `seen_train`
+- `seen_val`
+- `seen_test`
+- `unseen_train`
+- `unseen_val`
+- `unseen_test`
+
+### `metadata.json`
+
+- `gene_names`
+- `perturbation_names`
+
+This contract is consumed by `src/data/torch_dataset.py`,
+`scripts/train_transformer.py`, `scripts/train_baselines.py`,
+`scripts/evaluate_model.py`, and the Streamlit app.
+
+## Model Layer
+
+### Transformer
+
+File: `src/models/transformer.py`
+
+Default architecture:
+
+```text
+gene_embedding
++ scalar value projection(control_expression_i)
++ perturbation_embedding
+-> Transformer encoder
+-> per-gene regression head
+-> predicted delta expression
+```
+
+Default hyperparameters from `configs/model.yaml`:
 
 | Parameter | Value |
-|---|---|
+| --- | --- |
 | `d_model` | 128 |
 | `n_heads` | 4 |
 | `n_layers` | 2 |
@@ -114,63 +169,156 @@ Output: predicted delta_expression  [B, G]
 | `dropout` | 0.1 |
 | `hvg_count` | 512 |
 
----
+Stable design decisions:
 
-## Baseline Models
+- no positional encoding
+- additive perturbation injection to all gene tokens
+- standard self-attention only
+- delta-expression regression target
 
-### MLP (`src/models/mlp.py`)
+### Baselines
 
-A 3-layer fully connected network. Input: concatenation of control expression
-and a one-hot perturbation vector. Output: predicted delta expression.
+Files:
 
-### XGBoost (`src/models/xgboost_baseline.py`)
+- `src/models/mlp.py`
+- `src/models/xgboost_baseline.py`
 
-Gradient-boosted trees. Each gene's delta expression is predicted as a separate
-regression target using the same concatenated input representation. Metrics are
-written at train time.
+These provide lower-complexity reference points for quality comparisons and
+demo narratives. They are part of the MVP, not optional extras.
 
----
+## Training and Evaluation
+
+### Training
+
+Core training loop: `src/training/trainer.py`
+
+Key defaults from `configs/train.yaml`:
+
+- batch size: `16`
+- epochs: `20`
+- learning rate: `1e-3`
+- checkpoint metric: `pearson_per_perturbation`
+- seed: `42`
+
+### Metrics
+
+Core metrics in `src/evaluation/metrics.py`:
+
+- Pearson correlation
+- MSE
+- Top-k DEG overlap
+
+Primary reporting granularity:
+
+- `per-perturbation`
+
+Secondary reporting:
+
+- `per-gene`
+
+### DEG logic
+
+Implemented in `src/evaluation/deg.py`.
+
+Current default:
+
+- `scanpy.tl.rank_genes_groups`
+- method: `wilcoxon`
+- adjusted p-value threshold: `< 0.05`
+- absolute log fold change threshold: `> 0.25`
+
+### Error analysis
+
+Implemented in `src/evaluation/error_analysis.py`.
+
+Saved diagnostics include:
+
+- per-perturbation error CSVs
+- split-level error summaries
+- heuristic failure-mode labels
+
+These artifacts are for debugging and demo explanation. They are not new model
+targets and should not be framed as causal biological claims.
+
+## Artifact Contract
+
+### Per-run model artifacts
+
+A standard training/evaluation directory may include:
+
+- `best_model.pt`
+- `history.json`
+- `seen_test_metrics.json`
+- `unseen_test_metrics.json`
+- `seen_test_per_perturbation.csv`
+- `unseen_test_per_perturbation.csv`
+- `seen_test_error_summary.json`
+- `unseen_test_error_summary.json`
+- `run_summary.json`
+- `deg_artifact.csv`
+- `deg_artifact_metadata.json`
+
+### Cross-run and delivery artifacts
+
+Project-level delivery files include:
+
+- `artifacts/multi_seed_report.json`
+- `artifacts/project_snapshot.json`
+- `docs/assets/model_comparison_seen_norman2019_demo.png`
+- `docs/assets/transformer_inference_preview.png`
+- `docs/assets/transformer_error_analysis_preview.png`
+- `docs/assets/model_comparison_seen_synthetic_demo.png`
+- `docs/assets/transformer_inference_preview_synthetic_demo.png`
+
+These are consumed by:
+
+- `src/utils/project_health.py`
+- `src/utils/project_snapshot.py`
+- `src/utils/showcase.py`
+- `src/utils/interview_script.py`
+- `app/streamlit_app.py`
+
+## Ranking
+
+Implemented in `src/ranking/target_ranking.py`.
+
+The MVP ranking formula is intentionally simple and explicit:
+
+```text
+importance_score =
+  0.5 * normalized_abs_predicted_delta
++ 0.5 * normalized_deg_significance
+```
+
+Attention weights are not used as formal ranking features.
 
 ## Repository Layout
 
-```
+```text
 src/
-  data/         loading, preprocessing, pairing, PyTorch datasets
-  models/       TransformerPerturbationModel, MLP, XGBoost wrapper
-  training/     loss functions, training loop, checkpoint utilities
-  evaluation/   Pearson/MSE metrics, DEG overlap, analysis helpers
-  ranking/      target prioritization (predicted delta + DEG significance)
-  utils/        config loader, logger, seed control, comparison utilities
+  data/         loading, schema resolution, preprocessing, pairing, datasets
+  models/       Transformer, MLP, XGBoost
+  training/     losses and training loop
+  evaluation/   metrics, inference helpers, DEG logic, error analysis
+  ranking/      target prioritization
+  utils/        config, logging, seeds, snapshot/showcase/demo helpers
 
-scripts/        thin CLI entrypoints — call src/ only, no business logic
-configs/        YAML runtime configuration (data, model, training)
-app/            Streamlit UI — inference and visualization only
-notebooks/      EDA and model comparison Jupyter notebooks
-tests/          unit and integration tests (pytest, synthetic fixtures)
-docs/           architecture notes, dataset notes, figures
+scripts/        thin CLI entrypoints
+configs/        YAML runtime configuration
+app/            Streamlit UI only
+docs/           architecture, dataset notes, generated figures
+tests/          unit and integration tests
 ```
 
----
+## Delivery Layer
 
-## Evaluation Standards
+The repo now includes an explicit demo/readiness layer in addition to the core
+ML pipeline:
 
-| Metric | Granularity |
-|---|---|
-| Pearson correlation | per-perturbation mean |
-| MSE | per-perturbation mean |
-| Top-k DEG overlap | k = 20, 50, 100 |
+- `run_doctor.sh`: local project health and readiness checks
+- `run_snapshot.sh`: interview-friendly project snapshot
+- `run_showcase.sh`: live demo preparation
+- `run_pitch.sh`: speaking-script generation
 
-Seen (in-distribution) and unseen (held-out conditions) splits are always
-reported separately to measure generalization.
-
----
-
-## Configuration
-
-All runtime knobs are controlled through YAML files under `configs/`:
-
-| File | Controls |
-|---|---|
-| `configs/data.yaml` | dataset paths, filtering, normalization, HVG count, pairing, split protocol |
-| `configs/model.yaml` | architecture dimensions, HVG count, memory guardrails |
-| `configs/train.yaml` | learning rate, batch size, epochs, seed, evaluation thresholds |
+This is a deliberate part of the architecture. The project is meant to be
+job-ready and demo-ready, not just trainable.

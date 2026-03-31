@@ -8,7 +8,10 @@ from src.evaluation.error_analysis import (
     build_error_summary,
     build_failure_mode_count_frame,
     build_per_perturbation_error_table,
+    build_selected_condition_display_frame,
     build_selected_condition_story,
+    build_split_error_story,
+    build_worst_conditions_display_frame,
     build_worst_conditions_frame,
     format_failure_mode_label,
     select_perturbation_diagnostics,
@@ -216,6 +219,59 @@ def test_build_error_highlights_extracts_compact_story() -> None:
     assert highlights["worst_pearson_perturbation"] == "MAP2K6"
     assert highlights["worst_mse_perturbation"] == "FOXO4"
 
+def test_build_split_error_story_formats_headline_and_details() -> None:
+    summary = {
+        "split_name": "unseen_test",
+        "num_perturbations": 10,
+        "failure_mode_counts": {
+            "low_signal_condition": 10,
+        },
+        "worst_by_pearson": [
+            {
+                "perturbation": "MAP2K6",
+                "pearson": 0.5648,
+                "failure_mode": "low_signal_condition",
+            }
+        ],
+        "worst_by_mse": [
+            {
+                "perturbation": "FOXO4",
+                "mse": 0.0016,
+                "failure_mode": "low_signal_condition",
+            }
+        ],
+    }
+
+    story = build_split_error_story(summary, split_label="Unseen split")
+
+    assert story["split_label"] == "Unseen split"
+    assert "low-signal condition behavior (10/10)" in story["headline"]
+    assert "MAP2K6" in story["details"][0]
+    assert "FOXO4" in story["details"][1]
+
+
+def test_build_worst_conditions_display_frame_humanizes_failure_mode() -> None:
+    summary = {
+        "worst_by_pearson": [
+            {
+                "perturbation": "pert_bad",
+                "sample_count": 4,
+                "pearson": -0.4,
+                "failure_mode": "directional_mismatch",
+                "top_residual_genes": "g1,g2",
+            }
+        ]
+    }
+
+    frame = build_worst_conditions_display_frame(
+        summary,
+        rank_by="worst_by_pearson",
+        top_n=1,
+    )
+
+    assert list(frame["perturbation"]) == ["pert_bad"]
+    assert list(frame["failure_mode_label"]) == ["directional mismatch"]
+
 
 def test_format_failure_mode_label_humanizes_names() -> None:
     assert format_failure_mode_label("low_signal_condition") == "low-signal condition"
@@ -279,3 +335,28 @@ def test_build_selected_condition_story_marks_mostly_aligned_case() -> None:
     assert "mostly aligned" in story["headline"]
     assert story["worst_pearson_rank"] is None
     assert story["worst_mse_rank"] is None
+
+
+def test_build_selected_condition_display_frame_uses_story_label() -> None:
+    diagnostics = {
+        "sample_count": 7,
+        "pearson": 0.9205,
+        "mse": 0.0174,
+        "failure_mode": "mostly_aligned",
+        "error_to_signal_ratio": 0.59,
+    }
+    story = {
+        "failure_mode_label": "mostly aligned",
+    }
+
+    frame = build_selected_condition_display_frame(diagnostics, story)
+
+    assert list(frame.columns) == [
+        "Samples",
+        "Pearson",
+        "MSE",
+        "Failure Mode",
+        "Error/Signal",
+    ]
+    assert frame.iloc[0]["Samples"] == 7
+    assert frame.iloc[0]["Failure Mode"] == "mostly aligned"

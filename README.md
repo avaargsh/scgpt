@@ -254,6 +254,7 @@ Current app behavior:
 - if `deg_artifact.csv` exists in the artifact directory, combine predicted delta with real DEG significance
 - if `multi_seed_report.json` exists, show Transformer multi-seed stability for the active real/synthetic mode
 - if `*_error_summary.json` and `*_per_perturbation.csv` exist, show split-level failure highlights and selected-perturbation condition-level explanations
+- if `docs/assets/transformer_error_analysis_preview.png` exists, show the saved error-analysis preview figure inside the Diagnostics tab
 - show predicted vs observed delta, top predicted genes, true DEG rows, target ranking, and top-k DEG overlap
 
 Preprocess a dataset bundle:
@@ -468,6 +469,11 @@ Regenerate the README result assets with:
 ./scripts/run_generate_results_assets.sh
 ```
 
+This now refreshes:
+- `docs/assets/model_comparison_seen_norman2019_demo.png`
+- `docs/assets/transformer_inference_preview.png`
+- `docs/assets/transformer_error_analysis_preview.png`
+
 For the offline synthetic showcase:
 
 ```bash
@@ -527,6 +533,11 @@ On the seen split, the more pathological cases are easier to separate:
 
 This makes the next debugging step clearer: prioritize condition-level signal strength and sample support
 before assuming the core perturbation representation is fundamentally broken.
+![Norman2019 error-analysis preview](docs/assets/transformer_error_analysis_preview.png)
+
+The error-analysis preview figure condenses the saved seen/unseen failure summaries plus a selected-condition
+story for the preview perturbation, so the README and interview assets can show not just aggregate metrics
+but also what kind of failure is happening and where it concentrates.
 
 Regenerate these figures after training with:
 
@@ -573,7 +584,7 @@ jupyter lab notebooks/
 | Notebook | Description |
 | --- | --- |
 | [`01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb) | EDA of the Norman2019 bundle: dataset overview, perturbation frequency, control-mean distributions, delta-expression histogram, per-perturbation heatmap |
-| [`02_model_comparison.ipynb`](notebooks/02_model_comparison.ipynb) | Side-by-side metrics for Transformer, MLP, XGBoost; training curves; top-k DEG overlap bar charts; summary table |
+| [`02_model_comparison.ipynb`](notebooks/02_model_comparison.ipynb) | Side-by-side metrics for Transformer, MLP, XGBoost; top-k DEG overlap; saved error-analysis highlights and worst-case tables; selected-condition failure story; training curves |
 
 Both notebooks load from `data/processed/norman2019_demo_bundle` and `artifacts/`.
 Run `./scripts/run_norman2019_demo.sh` first to generate the required bundle.

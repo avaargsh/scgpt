@@ -66,6 +66,7 @@ def test_collect_project_health_reports_demo_modes_ready(tmp_path: Path) -> None
         "artifacts/transformer_seen_norman2019_demo/run_summary.json",
         "docs/assets/model_comparison_seen_norman2019_demo.png",
         "docs/assets/transformer_inference_preview.png",
+        "docs/assets/transformer_error_analysis_preview.png",
         "artifacts/mlp_seen_norman2019_demo/run_summary.json",
         "artifacts/xgboost_seen_norman2019_demo/xgboost_run_summary.json",
         "data/raw/NormanWeissman2019_filtered.h5ad",

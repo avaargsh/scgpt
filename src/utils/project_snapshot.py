@@ -156,6 +156,9 @@ def build_project_snapshot(project_root: str | Path = ".") -> dict[str, Any]:
         "real_inference_figure": _asset_entry(
             root, "docs/assets/transformer_inference_preview.png"
         ),
+        "real_error_analysis_figure": _asset_entry(
+            root, "docs/assets/transformer_error_analysis_preview.png"
+        ),
         "synthetic_comparison_figure": _asset_entry(
             root, "docs/assets/model_comparison_seen_synthetic_demo.png"
         ),

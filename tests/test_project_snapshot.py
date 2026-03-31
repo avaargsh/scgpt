@@ -30,6 +30,7 @@ def _create_repo_scaffold(root: Path) -> None:
         "README.md",
         "PROJECT_PLAN.md",
         "docs/architecture.md",
+        "docs/assets/transformer_error_analysis_preview.png",
         "CHANGELOG.md",
         "pyproject.toml",
         "uv.lock",
@@ -208,6 +209,7 @@ def test_build_project_snapshot_selects_best_real_model_and_deg_story(
     assert snapshot["headline"]["transformer_multiseed_num_runs"] == 3
     assert snapshot["headline"]["transformer_multiseed_unseen_pearson_mean"] == 0.8304
     assert snapshot["headline"]["all_real_models_unseen_pearson_ge_0_82"] is True
+    assert snapshot["assets"]["real_error_analysis_figure"]["exists"] is True
     assert (
         snapshot["transformer_error_highlights"]["unseen_test"]["worst_pearson_perturbation"]
         == "MAP2K6"

@@ -68,6 +68,10 @@ def test_format_showcase_report_includes_talk_track_and_commands() -> None:
                 "path": "docs/assets/transformer_inference_preview.png",
                 "exists": True,
             },
+            "real_error_analysis_figure": {
+                "path": "docs/assets/transformer_error_analysis_preview.png",
+                "exists": True,
+            },
         },
     }
     plan = {
@@ -87,5 +91,6 @@ def test_format_showcase_report_includes_talk_track_and_commands() -> None:
     assert "Anchor stability across 3 real Transformer seeds" in report
     assert "MAP2K6" in report
     assert "FOXO4" in report
+    assert "transformer_error_analysis_preview.png" in report
     assert "Streamlit" in report
     assert "./scripts/run_showcase.sh --launch-app" in report

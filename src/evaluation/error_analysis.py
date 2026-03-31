@@ -234,6 +234,16 @@ def format_failure_mode_label(failure_mode: Any) -> str:
     label = str(failure_mode).replace("_", " ")
     return label.replace("low signal", "low-signal")
 
+def format_split_label(split_name: Any) -> str:
+    """Render a human-readable split label for CLI/UI summaries."""
+    if split_name is None:
+        return "saved split"
+    label = str(split_name).replace("_", " ").strip().lower()
+    label = label.replace(" test", " split")
+    if label in {"seen", "unseen"}:
+        label += " split"
+    return label
+
 
 def build_error_highlights(error_summary: dict[str, Any]) -> dict[str, Any]:
     """Extract a compact, display-ready summary from a saved error summary artifact."""
@@ -291,6 +301,85 @@ def build_error_highlights(error_summary: dict[str, Any]) -> dict[str, Any]:
 
     return highlights
 
+
+def build_split_error_story(
+    error_summary: dict[str, Any],
+    *,
+    split_label: str | None = None,
+) -> dict[str, Any]:
+    """Build a concise story for one split-level error summary."""
+    if not error_summary:
+        return {}
+
+    highlights = build_error_highlights(error_summary)
+    resolved_split_label = split_label or format_split_label(highlights.get("split_name"))
+    dominant_label = highlights.get("dominant_failure_mode_label") or "n/a"
+    dominant_count = highlights.get("dominant_failure_mode_count")
+    num_perturbations = highlights.get("num_perturbations")
+
+    count_suffix = ""
+    if dominant_count is not None and num_perturbations:
+        count_suffix = f" ({dominant_count}/{num_perturbations})"
+
+    details: list[str] = []
+    worst_pearson_perturbation = highlights.get("worst_pearson_perturbation")
+    if worst_pearson_perturbation:
+        worst_pearson_text = (
+            f"Worst Pearson condition: {worst_pearson_perturbation}"
+        )
+        worst_pearson_value = highlights.get("worst_pearson_value")
+        worst_pearson_label = highlights.get("worst_pearson_failure_mode_label")
+        if worst_pearson_value is not None:
+            worst_pearson_text += f" (Pearson={float(worst_pearson_value):.4f}"
+            if worst_pearson_label and worst_pearson_label != "n/a":
+                worst_pearson_text += f", {worst_pearson_label}"
+            worst_pearson_text += ")."
+        else:
+            worst_pearson_text += "."
+        details.append(worst_pearson_text)
+
+    worst_mse_perturbation = highlights.get("worst_mse_perturbation")
+    if worst_mse_perturbation:
+        worst_mse_text = f"Worst MSE condition: {worst_mse_perturbation}"
+        worst_mse_value = highlights.get("worst_mse_value")
+        worst_mse_label = highlights.get("worst_mse_failure_mode_label")
+        if worst_mse_value is not None:
+            worst_mse_text += f" (MSE={float(worst_mse_value):.4f}"
+            if worst_mse_label and worst_mse_label != "n/a":
+                worst_mse_text += f", {worst_mse_label}"
+            worst_mse_text += ")."
+        else:
+            worst_mse_text += "."
+        details.append(worst_mse_text)
+
+    headline = (
+        f"{resolved_split_label} failures are dominated by {dominant_label} behavior"
+        f"{count_suffix}."
+    )
+    return {
+        "split_label": resolved_split_label,
+        "headline": headline,
+        "details": details,
+        "highlights": highlights,
+    }
+
+
+def build_worst_conditions_display_frame(
+    error_summary: dict[str, Any],
+    *,
+    rank_by: str,
+    top_n: int = 5,
+) -> pd.DataFrame:
+    """Build a worst-condition frame with human-readable failure-mode labels."""
+    frame = build_worst_conditions_frame(error_summary, rank_by=rank_by, top_n=top_n)
+    if frame.empty:
+        return frame
+    display_frame = frame.copy()
+    if "failure_mode" in display_frame.columns:
+        display_frame["failure_mode_label"] = display_frame["failure_mode"].map(
+            format_failure_mode_label
+        )
+    return display_frame
 
 def _find_condition_rank(
     error_summary: dict[str, Any],
@@ -409,6 +498,30 @@ def build_selected_condition_story(
         "worst_pearson_rank": pearson_rank,
         "worst_mse_rank": mse_rank,
     }
+
+def build_selected_condition_display_frame(
+    diagnostics: dict[str, Any],
+    story: dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    """Build a one-row diagnostics frame for a selected perturbation condition."""
+    if not diagnostics:
+        return pd.DataFrame()
+    story = story or {}
+    return pd.DataFrame(
+        [
+            {
+                "Samples": diagnostics.get("sample_count"),
+                "Pearson": diagnostics.get("pearson"),
+                "MSE": diagnostics.get("mse"),
+                "Failure Mode": story.get(
+                    "failure_mode_label",
+                    format_failure_mode_label(diagnostics.get("failure_mode")),
+                ),
+                "Error/Signal": diagnostics.get("error_to_signal_ratio"),
+            }
+        ]
+    )
+
 
 def select_perturbation_diagnostics(
     error_table: pd.DataFrame,

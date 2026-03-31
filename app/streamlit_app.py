@@ -16,6 +16,7 @@ from src.data.pairing import load_processed_bundle
 from src.evaluation.deg import DEG_ARTIFACT_FILENAME, DEG_METADATA_FILENAME, load_deg_artifact
 from src.evaluation.error_analysis import (
     build_failure_mode_count_frame,
+    build_selected_condition_display_frame,
     build_selected_condition_story,
     build_worst_conditions_frame,
     select_perturbation_diagnostics,
@@ -35,6 +36,12 @@ from src.utils.comparison import (
     shorten_model_label,
 )
 from src.utils.config import load_yaml
+from src.utils.demo_diagnostics import (
+    available_diagnostic_splits,
+    get_split_diagnostic_artifacts,
+    resolve_active_diagnostic_split,
+    resolve_error_analysis_preview_path,
+)
 from src.utils.multiseed import load_multiseed_report, select_multiseed_group
 
 REAL_BUNDLE_DIR = "data/processed/norman2019_demo_bundle"
@@ -278,17 +285,7 @@ def display_selected_split_diagnostics(
         if story["details"]:
             st.markdown("\n".join(f"- {detail}" for detail in story["details"]))
 
-    summary_df = pd.DataFrame(
-        [
-            {
-                "Samples": diagnostics.get("sample_count"),
-                "Pearson": diagnostics.get("pearson"),
-                "MSE": diagnostics.get("mse"),
-                "Failure Mode": story.get("failure_mode_label", diagnostics.get("failure_mode", "n/a")),
-                "Error/Signal": diagnostics.get("error_to_signal_ratio"),
-            }
-        ]
-    )
+    summary_df = build_selected_condition_display_frame(diagnostics, story)
     st.dataframe(
         summary_df.style.format(
             {
@@ -374,6 +371,11 @@ seen_error_summary = load_optional_json(str(artifact_dir / "seen_test_error_summ
 unseen_error_summary = load_optional_json(str(artifact_dir / "unseen_test_error_summary.json"))
 seen_error_table = load_optional_csv(str(artifact_dir / "seen_test_per_perturbation.csv"))
 unseen_error_table = load_optional_csv(str(artifact_dir / "unseen_test_per_perturbation.csv"))
+error_analysis_preview_path = resolve_error_analysis_preview_path(
+    PROJECT_ROOT,
+    demo_mode=demo_mode,
+    artifact_dir=artifact_dir,
+)
 model = load_model_cached(
     bundle_dir=str(bundle_dir),
     checkpoint_path=str(checkpoint_path),
@@ -396,8 +398,8 @@ selected_perturbation = st.sidebar.selectbox(
 )
 top_n = int(st.sidebar.slider("Top genes to display", min_value=10, max_value=30, value=15))
 
-inference_tab, comparison_tab, history_tab = st.tabs(
-    ["🔬 Inference", "📊 Model Comparison", "📈 Training History"]
+inference_tab, diagnostics_tab, comparison_tab, history_tab = st.tabs(
+    ["🔬 Inference", "🩺 Diagnostics", "📊 Model Comparison", "📈 Training History"]
 )
 
 with inference_tab:
@@ -599,6 +601,124 @@ with inference_tab:
      use_container_width=True,
      height=520,
  )
+
+with diagnostics_tab:
+ st.subheader("Diagnostics")
+ st.caption(
+     "Use the saved preview figure for a quick narrative, then inspect one saved split "
+     "interactively with the current sidebar perturbation selection."
+ )
+
+ preview_col, detail_col = st.columns([1.1, 1.0])
+ with preview_col:
+     st.markdown("#### Saved Error-Analysis Preview")
+     if error_analysis_preview_path is None:
+         if demo_mode == "synthetic":
+             st.info(
+                 "No saved synthetic error-analysis preview figure was found. "
+                 "The interactive diagnostics on the right still work when saved split artifacts exist."
+             )
+         else:
+             st.info(
+                 "No saved error-analysis preview figure was found. "
+                 "Run `./scripts/run_generate_results_assets.sh` to generate "
+                 "`docs/assets/transformer_error_analysis_preview.png`."
+             )
+     else:
+         st.image(str(error_analysis_preview_path), use_container_width=True)
+         st.caption(
+             "Saved real Norman2019 error-analysis preview."
+             if demo_mode == "real"
+             else "Saved synthetic showcase error-analysis preview."
+         )
+
+ with detail_col:
+     st.markdown("#### Interactive Split Diagnostics")
+     split_options = available_diagnostic_splits(
+         seen_error_summary=seen_error_summary,
+         unseen_error_summary=unseen_error_summary,
+     )
+     if not split_options:
+         st.info(
+             "No saved split diagnostics were found. Run `./scripts/run_evaluate.sh` "
+             "or regenerate the demo artifacts to populate `*_error_summary.json` and "
+             "`*_per_perturbation.csv` files."
+         )
+     else:
+         split_labels = {
+             "seen_test": "Seen split",
+             "unseen_test": "Unseen split",
+         }
+         default_split = resolve_active_diagnostic_split(
+             None,
+             seen_error_summary=seen_error_summary,
+             unseen_error_summary=unseen_error_summary,
+         )
+         default_index = split_options.index(default_split) if default_split in split_options else 0
+         requested_split = st.radio(
+             "Saved diagnostic split",
+             options=split_options,
+             index=default_index,
+             format_func=lambda split_name: split_labels.get(split_name, split_name),
+             horizontal=True,
+         )
+         active_split = resolve_active_diagnostic_split(
+             requested_split,
+             seen_error_summary=seen_error_summary,
+             unseen_error_summary=unseen_error_summary,
+         )
+         active_summary, active_table = get_split_diagnostic_artifacts(
+             active_split,
+             seen_error_summary=seen_error_summary,
+             unseen_error_summary=unseen_error_summary,
+             seen_error_table=seen_error_table,
+             unseen_error_table=unseen_error_table,
+         )
+         active_label = split_labels.get(active_split or "", "Saved split")
+
+         display_error_summary(active_label, active_summary)
+
+         st.markdown(f"#### {active_label}: {selected_perturbation}")
+         active_diagnostics = select_perturbation_diagnostics(
+             active_table,
+             perturbation_name=selected_perturbation,
+         )
+         display_selected_split_diagnostics(
+             active_label,
+             selected_perturbation,
+             active_diagnostics,
+             active_summary,
+         )
+
+         if not active_table.empty:
+             with st.expander(f"{active_label} per-perturbation diagnostics", expanded=False):
+                 display_columns = [
+                     column
+                     for column in [
+                         "perturbation",
+                         "sample_count",
+                         "pearson",
+                         "mse",
+                         "failure_mode",
+                         "top_residual_genes",
+                     ]
+                     if column in active_table.columns
+                 ]
+                 st.dataframe(
+                     active_table.loc[:, display_columns].style.format(
+                         {
+                             "sample_count": "{:.0f}",
+                             "pearson": "{:.4f}",
+                             "mse": "{:.4f}",
+                         },
+                         na_rep="—",
+                     ),
+                     use_container_width=True,
+                     height=420,
+                 )
+                 st.caption(
+                     "The selected perturbation above follows the current sidebar choice."
+                 )
 
 # ── Model Comparison tab ─────────────────────────────────────────────────────
 with comparison_tab:

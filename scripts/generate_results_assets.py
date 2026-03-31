@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -18,6 +19,13 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.data.io import read_json
 from src.data.pairing import load_processed_bundle
 from src.evaluation.deg import DEG_ARTIFACT_FILENAME, load_deg_artifact
+from src.evaluation.error_analysis import (
+    build_selected_condition_story,
+    build_split_error_story,
+    build_worst_conditions_display_frame,
+    format_split_label,
+    select_perturbation_diagnostics,
+)
 from src.evaluation.inference import (
     build_gene_comparison_frame,
     build_perturbation_batch,
@@ -87,11 +95,143 @@ def parse_args() -> argparse.Namespace:
         default="transformer_inference_preview.png",
         help="Filename for the transformer inference preview figure.",
     )
+    parser.add_argument(
+        "--error-summary-output-name",
+        default="transformer_error_analysis_preview.png",
+        help="Filename for the transformer error-analysis preview figure.",
+    )
     return parser.parse_args()
 
 
 def _load_summary(path: str | Path) -> dict:
     return read_json(path)
+def _load_optional_json(path: str | Path) -> dict:
+    file_path = Path(path)
+    if not file_path.exists():
+        return {}
+    return read_json(file_path)
+
+
+def _load_optional_csv(path: str | Path) -> pd.DataFrame:
+    file_path = Path(path)
+    if not file_path.exists():
+        return pd.DataFrame()
+    return pd.read_csv(file_path)
+
+
+def _format_metric(value: object, precision: int = 4) -> str:
+    if value is None or pd.isna(value):
+        return "n/a"
+    return f"{float(value):.{precision}f}"
+
+
+def _title_case_split_label(split_name: str) -> str:
+    label = format_split_label(split_name)
+    return label[:1].upper() + label[1:] if label else "Saved split"
+
+
+def _render_story_panel(ax: plt.Axes, *, title: str, lines: list[str]) -> None:
+    ax.axis("off")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.text(0.0, 1.0, title, fontsize=13, fontweight="bold", va="top")
+    y = 0.88
+    for line in lines:
+        wrapped = textwrap.fill(f"- {line}", width=62, subsequent_indent="  ")
+        ax.text(0.0, y, wrapped, fontsize=10, va="top")
+        y -= 0.07 * (wrapped.count("\n") + 1) + 0.03
+
+
+def _build_split_panel_lines(split_name: str, error_summary: dict) -> list[str]:
+    if not error_summary:
+        return [f"No saved {format_split_label(split_name)} diagnostics found."]
+
+    story = build_split_error_story(
+        error_summary,
+        split_label=_title_case_split_label(split_name),
+    )
+    lines = [story["headline"], *story["details"]]
+    worst_frame = build_worst_conditions_display_frame(
+        error_summary,
+        rank_by="worst_by_pearson",
+        top_n=2,
+    )
+    if not worst_frame.empty:
+        preview = "; ".join(
+            (
+                f"{row['perturbation']} "
+                f"(Pearson={_format_metric(row.get('pearson'))}, "
+                f"{row.get('failure_mode_label', 'n/a')})"
+            )
+            for _, row in worst_frame.iterrows()
+        )
+        lines.append(f"Top saved worst-Pearson conditions: {preview}.")
+    return lines
+
+
+def _build_selected_condition_panel(
+    *,
+    perturbation_name: str,
+    seen_error_table: pd.DataFrame,
+    seen_error_summary: dict,
+    unseen_error_table: pd.DataFrame,
+    unseen_error_summary: dict,
+) -> dict[str, str | None | list[str]]:
+    for split_name, error_table, error_summary in (
+        ("unseen_test", unseen_error_table, unseen_error_summary),
+        ("seen_test", seen_error_table, seen_error_summary),
+    ):
+        diagnostics = select_perturbation_diagnostics(
+            error_table,
+            perturbation_name=perturbation_name,
+        )
+        if not diagnostics:
+            continue
+        story = build_selected_condition_story(
+            perturbation_name=perturbation_name,
+            diagnostics=diagnostics,
+            error_summary=error_summary,
+        )
+        metric_bits: list[str] = []
+        if diagnostics.get("sample_count") is not None:
+            metric_bits.append(f"samples={int(diagnostics['sample_count'])}")
+        if diagnostics.get("pearson") is not None:
+            metric_bits.append(f"Pearson={_format_metric(diagnostics.get('pearson'))}")
+        if diagnostics.get("mse") is not None:
+            metric_bits.append(f"MSE={_format_metric(diagnostics.get('mse'))}")
+        if diagnostics.get("error_to_signal_ratio") is not None:
+            metric_bits.append(
+                f"error/signal={_format_metric(diagnostics.get('error_to_signal_ratio'))}"
+            )
+
+        lines = [story.get("headline", f"{perturbation_name} diagnostics are available.")]
+        if metric_bits:
+            lines.append(", ".join(metric_bits) + ".")
+        top_residual_genes = diagnostics.get("top_residual_genes")
+        if top_residual_genes:
+            lines.append(f"Top residual genes: {top_residual_genes}.")
+        rank_bits: list[str] = []
+        if story.get("worst_pearson_rank") is not None:
+            rank_bits.append(f"worst-Pearson rank #{int(story['worst_pearson_rank'])}")
+        if story.get("worst_mse_rank") is not None:
+            rank_bits.append(f"worst-MSE rank #{int(story['worst_mse_rank'])}")
+        if rank_bits:
+            lines.append("; ".join(rank_bits) + ".")
+
+        return {
+            "split_name": split_name,
+            "title": (
+                f"Selected condition — {perturbation_name} "
+                f"({_title_case_split_label(split_name)})"
+            ),
+            "lines": lines,
+        }
+
+    return {
+        "split_name": None,
+        "title": f"Selected condition — {perturbation_name}",
+        "lines": [f"No saved per-perturbation diagnostics found for {perturbation_name}."],
+    }
 
 
 def generate_model_comparison_figure(
@@ -228,6 +368,65 @@ def generate_inference_preview_figure(
     plt.close(figure)
     return perturbation_name
 
+def generate_error_analysis_preview_figure(
+    *,
+    artifact_dir: str | Path,
+    perturbation_name: str,
+    output_path: Path,
+) -> dict[str, str | bool | None]:
+    artifact_root = Path(artifact_dir)
+    seen_error_summary = _load_optional_json(artifact_root / "seen_test_error_summary.json")
+    unseen_error_summary = _load_optional_json(artifact_root / "unseen_test_error_summary.json")
+    seen_error_table = _load_optional_csv(artifact_root / "seen_test_per_perturbation.csv")
+    unseen_error_table = _load_optional_csv(artifact_root / "unseen_test_per_perturbation.csv")
+
+    if not seen_error_summary and not unseen_error_summary:
+        return {
+            "generated": False,
+            "selected_perturbation": perturbation_name,
+            "selected_split": None,
+        }
+
+    selected_panel = _build_selected_condition_panel(
+        perturbation_name=perturbation_name,
+        seen_error_table=seen_error_table,
+        seen_error_summary=seen_error_summary,
+        unseen_error_table=unseen_error_table,
+        unseen_error_summary=unseen_error_summary,
+    )
+
+    figure = plt.figure(figsize=(12, 7.5))
+    grid = figure.add_gridspec(2, 2, height_ratios=[1.0, 0.85])
+    ax_seen = figure.add_subplot(grid[0, 0])
+    ax_unseen = figure.add_subplot(grid[0, 1])
+    ax_selected = figure.add_subplot(grid[1, :])
+
+    _render_story_panel(
+        ax_seen,
+        title="Seen split highlights",
+        lines=_build_split_panel_lines("seen_test", seen_error_summary),
+    )
+    _render_story_panel(
+        ax_unseen,
+        title="Unseen split highlights",
+        lines=_build_split_panel_lines("unseen_test", unseen_error_summary),
+    )
+    _render_story_panel(
+        ax_selected,
+        title=str(selected_panel["title"]),
+        lines=list(selected_panel["lines"]),
+    )
+
+    figure.suptitle("PerturbScope-GPT Error-Analysis Preview", fontsize=16)
+    figure.tight_layout()
+    figure.savefig(output_path, dpi=180, bbox_inches="tight")
+    plt.close(figure)
+    return {
+        "generated": True,
+        "selected_perturbation": perturbation_name,
+        "selected_split": selected_panel["split_name"],
+    }
+
 
 def main() -> None:
     args = parse_args()
@@ -258,9 +457,25 @@ def main() -> None:
         perturbation_name=args.perturbation_name,
         output_path=output_dir / args.preview_output_name,
     )
+    error_preview = generate_error_analysis_preview_figure(
+        artifact_dir=args.transformer_artifact_dir,
+        perturbation_name=used_perturbation,
+        output_path=output_dir / args.error_summary_output_name,
+    )
 
     print(f"Generated README assets in {output_dir}")
     print(f"Inference preview perturbation: {used_perturbation}")
+    if error_preview["generated"]:
+        split_label = error_preview["selected_split"]
+        selected_split_text = (
+            format_split_label(split_label) if split_label is not None else "saved split"
+        )
+        print(
+            "Error-analysis preview perturbation: "
+            f"{error_preview['selected_perturbation']} ({selected_split_text})"
+        )
+    else:
+        print("Error-analysis preview skipped: saved error-analysis artifacts were not found.")
 
 
 if __name__ == "__main__":
